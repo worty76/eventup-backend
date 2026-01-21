@@ -17,14 +17,14 @@ const createTransporter = () => {
 const sendEmail = async (options) => {
   try {
     // đoạn này để test email trong dev môi trường không có email config
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.log('⚠️  Email credentials not configured. Email simulation:');
-      console.log('   To:', options.to);
-      console.log('   Subject:', options.subject);
-      console.log('   Content:', options.text);
-      console.log('   [DEV MODE] Email would be sent in production');
-      return { messageId: 'dev-mode-no-email', simulated: true };
-    }
+    // if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    //   console.log('⚠️  Email credentials not configured. Email simulation:');
+    //   console.log('   To:', options.to);
+    //   console.log('   Subject:', options.subject);
+    //   console.log('   Content:', options.text);
+    //   console.log('   [DEV MODE] Email would be sent in production');
+    //   return { messageId: 'dev-mode-no-email', simulated: true };
+    // }
 
     const transporter = createTransporter();
 
