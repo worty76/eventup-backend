@@ -1,4 +1,4 @@
-const { Event, Application } = require('../models');
+const { Event, Application } = require("../models");
 
 // @desc    Get all events (public with filters)
 // @route   GET /api/events
@@ -14,28 +14,28 @@ exports.getEvents = async (req, res, next) => {
       timeTo,
       urgent,
       page = 1,
-      limit = 10
+      limit = 10,
     } = req.query;
 
     // Build query
-    const query = { status: 'RECRUITING' };
+    const query = { status: "RECRUITING" };
 
     if (keyword) {
       query.$or = [
-        { title: { $regex: keyword, $options: 'i' } },
-        { description: { $regex: keyword, $options: 'i' } }
+        { title: { $regex: keyword, $options: "i" } },
+        { description: { $regex: keyword, $options: "i" } },
       ];
     }
 
     if (location) {
-      query.location = { $regex: location, $options: 'i' };
+      query.location = { $regex: location, $options: "i" };
     }
 
     if (type) {
       query.eventType = type;
     }
 
-    if (urgent === 'true') {
+    if (urgent === "true") {
       query.urgent = true;
     }
 
@@ -50,7 +50,7 @@ exports.getEvents = async (req, res, next) => {
 
     // Execute query
     const events = await Event.find(query)
-      .populate('btcId', 'email')
+      .populate("btcId", "email")
       .sort({ urgent: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -63,7 +63,7 @@ exports.getEvents = async (req, res, next) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: events
+      data: events,
     });
   } catch (error) {
     next(error);
@@ -75,22 +75,36 @@ exports.getEvents = async (req, res, next) => {
 // @access  Public
 exports.getEvent = async (req, res, next) => {
   try {
-    const event = await Event.findById(req.params.eventId)
-      .populate('btcId', 'email phone');
+    const event = await Event.findById(req.params.eventId).populate({
+      path: "btcId",
+      select: "email phone agencyName fullName avatarUrl",
+      populate: { path: "btcProfile" },
+    });
 
     if (!event) {
       return res.status(404).json({
         success: false,
-        message: 'Event not found'
+        message: "Event not found",
       });
     }
 
     // Increment views
     await event.incrementViews();
 
+    // Calculate successful events count (events with COMPLETED status)
+    const completedEventsCount = await Event.countDocuments({
+      btcId: event.btcId._id,
+      status: "COMPLETED",
+    });
+
+    const eventObj = event.toObject();
+    if (eventObj.btcId && eventObj.btcId.btcProfile) {
+      eventObj.btcId.btcProfile.successfulEventsCount = completedEventsCount;
+    }
+
     res.status(200).json({
       success: true,
-      data: event
+      data: eventObj,
     });
   } catch (error) {
     next(error);
@@ -109,42 +123,61 @@ exports.createEvent = async (req, res, next) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const postsThisMonth = await Event.countDocuments({
       btcId: user._id,
-      createdAt: { $gte: startOfMonth }
+      createdAt: { $gte: startOfMonth },
     });
 
-    const postLimit = user.isPremiumActive() 
-      ? parseInt(process.env.PREMIUM_POST_LIMIT) 
-      : parseInt(process.env.FREE_POST_LIMIT);
+    // Default limits if not in env
+    const FREE_POST_LIMIT = parseInt(process.env.FREE_POST_LIMIT || "3");
+    const PREMIUM_POST_LIMIT = parseInt(process.env.PREMIUM_POST_LIMIT || "15");
+    const PREMIUM_URGENT_LIMIT = 3;
+
+    const postLimit = user.isPremiumActive()
+      ? PREMIUM_POST_LIMIT
+      : FREE_POST_LIMIT;
 
     if (postsThisMonth >= postLimit) {
       return res.status(403).json({
         success: false,
-        message: `You have reached your monthly post limit (${postLimit}). Upgrade to Premium for more posts.`
+        message: `You have reached your monthly post limit (${postLimit}). ${
+          !user.isPremiumActive() ? "Upgrade to Premium for more posts." : ""
+        }`,
       });
     }
 
     // Check urgent feature (Premium only)
-    if (req.body.urgent && !user.isPremiumActive()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Urgent posts are available for Premium members only'
+    if (req.body.urgent) {
+      if (!user.isPremiumActive()) {
+        return res.status(403).json({
+          success: false,
+          message: "Urgent posts are available for Premium members only",
+        });
+      }
+
+      // Check urgent limit
+      const urgentPostsThisMonth = await Event.countDocuments({
+        btcId: user._id,
+        urgent: true,
+        createdAt: { $gte: startOfMonth },
       });
+
+      if (urgentPostsThisMonth >= PREMIUM_URGENT_LIMIT) {
+        return res.status(403).json({
+          success: false,
+          message: `You have reached your monthly urgent post limit (${PREMIUM_URGENT_LIMIT}).`,
+        });
+      }
     }
 
     // Create event
     const event = await Event.create({
       ...req.body,
       btcId: user._id,
-      status: 'RECRUITING'
+      status: "RECRUITING",
     });
-
-    // Update post count
-    user.subscription.postUsed += 1;
-    await user.save();
 
     res.status(201).json({
       success: true,
-      data: event
+      data: event,
     });
   } catch (error) {
     next(error);
@@ -161,7 +194,7 @@ exports.updateEvent = async (req, res, next) => {
     if (!event) {
       return res.status(404).json({
         success: false,
-        message: 'Event not found'
+        message: "Event not found",
       });
     }
 
@@ -169,18 +202,18 @@ exports.updateEvent = async (req, res, next) => {
     if (event.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to update this event'
+        message: "Not authorized to update this event",
       });
     }
 
     event = await Event.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
-      runValidators: true
+      runValidators: true,
     });
 
     res.status(200).json({
       success: true,
-      data: event
+      data: event,
     });
   } catch (error) {
     next(error);
@@ -197,7 +230,7 @@ exports.deleteEvent = async (req, res, next) => {
     if (!event) {
       return res.status(404).json({
         success: false,
-        message: 'Event not found'
+        message: "Event not found",
       });
     }
 
@@ -205,16 +238,18 @@ exports.deleteEvent = async (req, res, next) => {
     if (event.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to delete this event'
+        message: "Not authorized to delete this event",
       });
     }
 
     // Check if there are applications
-    const applicationCount = await Application.countDocuments({ eventId: event._id });
+    const applicationCount = await Application.countDocuments({
+      eventId: event._id,
+    });
     if (applicationCount > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete event with existing applications'
+        message: "Cannot delete event with existing applications",
       });
     }
 
@@ -222,7 +257,7 @@ exports.deleteEvent = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Event deleted successfully'
+      message: "Event deleted successfully",
     });
   } catch (error) {
     next(error);
@@ -256,7 +291,84 @@ exports.getMyEvents = async (req, res, next) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: events
+      data: events,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get BTC dashboard stats
+// @route   GET /api/events/btc/dashboard/stats
+// @access  Private (BTC)
+exports.getDashboardStats = async (req, res, next) => {
+  try {
+    const btcId = req.user._id;
+
+    // 1. Active Events (Status 'RECRUITING')
+    const activeEventsCount = await Event.countDocuments({
+      btcId,
+      status: "RECRUITING",
+    });
+
+    // 2. Total Views
+    const events = await Event.find({ btcId }).select("views");
+    const totalViews = events.reduce((acc, curr) => acc + (curr.views || 0), 0);
+
+    // 3. New Applications (Pending)
+    const eventIds = events.map((e) => e._id);
+    const pendingApplications = await Application.countDocuments({
+      eventId: { $in: eventIds },
+      status: "PENDING",
+    });
+
+    // 4. Chart Data (Last 7 days applications)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const applications = await Application.aggregate([
+      {
+        $match: {
+          eventId: { $in: eventIds },
+          createdAt: { $gte: sevenDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill missing days
+    const chartData = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dateString = d.toISOString().split("T")[0];
+      const found = applications.find((a) => a._id === dateString);
+
+      // Format date as DD/MM for display
+      const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+
+      chartData.push({
+        name: displayDate, // DD/MM
+        fullDate: dateString,
+        value: found ? found.count : 0,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        activeEvents: activeEventsCount,
+        totalViews,
+        pendingApplications,
+        chartData,
+      },
     });
   } catch (error) {
     next(error);

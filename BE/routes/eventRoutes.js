@@ -1,17 +1,32 @@
-const express = require('express');
-const { body } = require('express-validator');
-const validate = require('../middleware/validate');
+const express = require("express");
+const { body } = require("express-validator");
+const validate = require("../middleware/validate");
 const {
   getEvents,
   getEvent,
   createEvent,
   updateEvent,
   deleteEvent,
-  getMyEvents
-} = require('../controllers/eventController');
-const { protect, isBTC, optionalAuth } = require('../middleware/auth');
+  getMyEvents,
+  getDashboardStats,
+} = require("../controllers/eventController");
+const { protect, isBTC, optionalAuth } = require("../middleware/auth");
 
 const router = express.Router();
+
+/**
+ * @swagger
+ * /api/events/btc/dashboard/stats:
+ *   get:
+ *     summary: Lấy thống kê dashboard BTC
+ *     tags: [Events]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thống kê dashboard
+ */
+router.get("/btc/dashboard/stats", protect, isBTC, getDashboardStats);
 
 /**
  * @swagger
@@ -70,7 +85,7 @@ const router = express.Router();
  *                     $ref: '#/components/schemas/Event'
  */
 // Public routes
-router.get('/', optionalAuth, getEvents);
+router.get("/", optionalAuth, getEvents);
 
 /**
  * @swagger
@@ -90,7 +105,7 @@ router.get('/', optionalAuth, getEvents);
  *       404:
  *         description: Sự kiện không tồn tại
  */
-router.get('/:eventId', optionalAuth, getEvent);
+router.get("/:eventId", optionalAuth, getEvent);
 
 /**
  * @swagger
@@ -156,18 +171,26 @@ router.get('/:eventId', optionalAuth, getEvent);
  *         description: Đã hết quota hoặc không có quyền
  */
 // BTC routes
-router.post('/btc/events', protect, isBTC, [
-  body('title').notEmpty().withMessage('Title is required'),
-  body('description').notEmpty().withMessage('Description is required'),
-  body('location').notEmpty().withMessage('Location is required'),
-  body('eventType').notEmpty().withMessage('Event type is required'),
-  body('salary').notEmpty().withMessage('Salary is required'),
-  body('startTime').isISO8601().withMessage('Valid start time is required'),
-  body('endTime').isISO8601().withMessage('Valid end time is required'),
-  body('deadline').isISO8601().withMessage('Valid deadline is required'),
-  body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  validate
-], createEvent);
+router.post(
+  "/btc/events",
+  protect,
+  isBTC,
+  [
+    body("title").notEmpty().withMessage("Title is required"),
+    body("description").notEmpty().withMessage("Description is required"),
+    body("location").notEmpty().withMessage("Location is required"),
+    body("eventType").notEmpty().withMessage("Event type is required"),
+    body("salary").notEmpty().withMessage("Salary is required"),
+    body("startTime").isISO8601().withMessage("Valid start time is required"),
+    body("endTime").isISO8601().withMessage("Valid end time is required"),
+    body("deadline").isISO8601().withMessage("Valid deadline is required"),
+    body("quantity")
+      .isInt({ min: 1 })
+      .withMessage("Quantity must be at least 1"),
+    validate,
+  ],
+  createEvent,
+);
 
 /**
  * @swagger
@@ -199,7 +222,7 @@ router.post('/btc/events', protect, isBTC, [
  *       403:
  *         description: Không có quyền
  */
-router.put('/btc/events/:id', protect, isBTC, updateEvent);
+router.put("/btc/events/:id", protect, isBTC, updateEvent);
 
 /**
  * @swagger
@@ -221,7 +244,7 @@ router.put('/btc/events/:id', protect, isBTC, updateEvent);
  *       400:
  *         description: Không thể xóa sự kiện có ứng viên
  */
-router.delete('/btc/events/:id', protect, isBTC, deleteEvent);
+router.delete("/btc/events/:id", protect, isBTC, deleteEvent);
 
 /**
  * @swagger
@@ -244,6 +267,6 @@ router.delete('/btc/events/:id', protect, isBTC, deleteEvent);
  *       200:
  *         description: Danh sách sự kiện
  */
-router.get('/btc/events', protect, isBTC, getMyEvents);
+router.get("/btc/events", protect, isBTC, getMyEvents);
 
 module.exports = router;

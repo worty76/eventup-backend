@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
 // Create transporter
 const createTransporter = () => {
@@ -8,14 +8,19 @@ const createTransporter = () => {
     secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
-    }
+      pass: process.env.EMAIL_PASSWORD,
+    },
   });
 };
 
 // Send email
 const sendEmail = async (options) => {
   try {
+    console.log("--- EMAIL DEBUG ---");
+    console.log("To:", options.to);
+    console.log("Subject:", options.subject);
+    console.log("Text:", options.text);
+    console.log("-------------------");
     // đoạn này để test email trong dev môi trường không có email config
     // if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     //   console.log('⚠️  Email credentials not configured. Email simulation:');
@@ -33,21 +38,21 @@ const sendEmail = async (options) => {
       to: options.to,
       subject: options.subject,
       text: options.text,
-      html: options.html
+      html: options.html,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent:', info.messageId);
+    console.log("Email sent:", info.messageId);
     return info;
   } catch (error) {
-    console.error('Email send error:', error);
+    console.error("Email send error:", error);
     throw error;
   }
 };
 
 // Send verification email
 const sendVerificationEmail = async (email, otp) => {
-  const subject = 'Verify Your Account';
+  const subject = "Verify Your Account";
   const text = `Your OTP code is: ${otp}. Valid for ${process.env.OTP_EXPIRE_MINUTES} minutes.`;
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -64,7 +69,7 @@ const sendVerificationEmail = async (email, otp) => {
 
 // Send application notification email
 const sendApplicationNotification = async (email, eventTitle) => {
-  const subject = 'New Application Received';
+  const subject = "New Application Received";
   const text = `You have received a new application for your event: ${eventTitle}`;
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -80,7 +85,7 @@ const sendApplicationNotification = async (email, eventTitle) => {
 
 // Send approval notification email
 const sendApprovalEmail = async (email, eventTitle) => {
-  const subject = 'Application Approved';
+  const subject = "Application Approved";
   const text = `Your application for "${eventTitle}" has been approved!`;
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -98,5 +103,5 @@ module.exports = {
   sendEmail,
   sendVerificationEmail,
   sendApplicationNotification,
-  sendApprovalEmail
+  sendApprovalEmail,
 };
