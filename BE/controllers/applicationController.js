@@ -133,28 +133,35 @@ exports.getEventApplications = async (req, res, next) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const applications = await Application.find(query)
-      .populate('ctvId', 'email phone')
       .populate({
         path: 'ctvId',
-        populate: {
-          path: 'userId',
-          model: 'CTVProfile',
-          select: 'fullName avatar skills experiences reputation'
-        }
+        select: 'email phone role status'
       })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
+    const applicationsWithProfile = await Promise.all(
+      applications.map(async (app) => {
+        const ctvProfile = await CTVProfile.findOne({ userId: app.ctvId._id })
+          .select('fullName avatar skills experiences reputation');
+        
+        return {
+          ...app.toObject(),
+          ctvProfile: ctvProfile || null
+        };
+      })
+    );
+
     const total = await Application.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: applications.length,
+      count: applicationsWithProfile.length,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: applications
+      data: applicationsWithProfile  // ✅ Đổi từ applications → applicationsWithProfile
     });
   } catch (error) {
     next(error);

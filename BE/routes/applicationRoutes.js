@@ -99,7 +99,7 @@ router.get('/btc/events/:eventId/applications', protect, isBTC, getEventApplicat
 
 /**
  * @swagger
- * /api/applications/btc/applications/{id}/approve:
+ * /api/applications/{id}/approve:
  *   post:
  *     summary: Chấp nhận ứng viên (BTC)
  *     tags: [Applications]
@@ -123,14 +123,14 @@ router.get('/btc/events/:eventId/applications', protect, isBTC, getEventApplicat
  *       200:
  *         description: Chấp nhận thành công
  */
-router.post('/btc/applications/:id/approve', protect, isBTC, [
+router.post('/:id/approve', protect, isBTC, [
   body('assignedRole').optional().isString(),
   validate
 ], approveApplication);
 
 /**
  * @swagger
- * /api/applications/btc/applications/{id}/reject:
+ * /api/applications/{id}/reject:
  *   post:
  *     summary: Từ chối ứng viên (BTC)
  *     tags: [Applications]
@@ -154,14 +154,14 @@ router.post('/btc/applications/:id/approve', protect, isBTC, [
  *       200:
  *         description: Từ chối thành công
  */
-router.post('/btc/applications/:id/reject', protect, isBTC, [
+router.post('/:id/reject', protect, isBTC, [
   body('rejectionReason').optional().isString(),
   validate
 ], rejectApplication);
 
 /**
  * @swagger
- * /api/applications/btc/applications/bulk-approve:
+ * /api/applications/bulk-approve:
  *   post:
  *     summary: Chấp nhận nhiều ứng viên cùng lúc (BTC Premium)
  *     tags: [Applications]
@@ -189,7 +189,7 @@ router.post('/btc/applications/:id/reject', protect, isBTC, [
  *         description: Yêu cầu gói Premium
  */
 // Premium feature
-router.post('/btc/applications/bulk-approve', protect, isBTC, isPremium, [
+router.post('/bulk-approve', protect, isBTC, isPremium, [
   body('applicationIds').isArray().withMessage('Application IDs must be an array'),
   body('role').optional().isString(),
   validate
