@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 exports.healthCheck = async (req, res) => {
   res.status(200).json({
     status: 'ok',
-    service: 'job-event-platform',
+    service: 'job-event-web',
     timestamp: new Date().toISOString()
   });
 };
