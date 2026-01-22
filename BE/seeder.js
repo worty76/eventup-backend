@@ -132,6 +132,32 @@ const ctvProfiles = [
   },
 ];
 
+// Generate 20 Test BTC Accounts
+for (let i = 1; i <= 20; i++) {
+  const userId = new mongoose.Types.ObjectId();
+  users.push({
+    _id: userId,
+    email: `btc_test_${i}@gmail.com`,
+    passwordHash: "123456", // Will be hashed in importData
+    role: "BTC",
+    phone: `09000000${i.toString().padStart(2, "0")}`,
+    isEmailVerified: true,
+    status: "ACTIVE",
+    subscription: { plan: "PREMIUM", expiredAt: new Date("2026-12-31") },
+  });
+
+  btcProfiles.push({
+    userId: userId,
+    agencyName: `Test Agency ${i}`,
+    logo: "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=500&auto=format&fit=crop&q=60",
+    address: `District ${i}, Ho Chi Minh City`,
+    website: `https://test-agency-${i}.vn`,
+    description: `This is a test agency account number ${i} for system testing purposes.`,
+    verified: true,
+    rating: { average: 4.5, totalReviews: 10 + i },
+  });
+}
+
 const events = [
   {
     btcId: users[0]._id,

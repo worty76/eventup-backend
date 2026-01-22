@@ -9,6 +9,7 @@ exports.getEvents = async (req, res, next) => {
       keyword,
       location,
       salary,
+      salaryRange, // 'low' (<500K), 'medium' (500K-1M), 'high' (>1M)
       type,
       timeFrom,
       timeTo,
@@ -48,22 +49,46 @@ exports.getEvents = async (req, res, next) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Execute query
-    const events = await Event.find(query)
-      .populate("btcId", "email")
-      .sort({ urgent: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    // Helper function to parse salary string to number (in VND)
+    // Vietnamese format uses dots as thousand separators: "500.000 VNĐ/ngày" = 500,000 VND
+    const parseSalary = (salaryStr) => {
+      if (!salaryStr) return 0;
+      // Remove all non-digit characters to extract the number
+      const numbers = salaryStr.replace(/[^0-9]/g, "");
+      return parseInt(numbers) || 0;
+    };
 
-    const total = await Event.countDocuments(query);
+    // Execute query
+    let events = await Event.find(query)
+      .populate("btcId", "email")
+      .sort({ urgent: -1, createdAt: -1 });
+
+    // Apply salary range filter in-memory (since salary is stored as string)
+    if (salaryRange) {
+      events = events.filter((event) => {
+        const salaryValue = parseSalary(event.salary);
+        if (salaryRange === "low") {
+          return salaryValue < 500000;
+        } else if (salaryRange === "medium") {
+          return salaryValue >= 500000 && salaryValue <= 1000000;
+        } else if (salaryRange === "high") {
+          return salaryValue > 1000000;
+        }
+        return true;
+      });
+    }
+
+    // Apply pagination after filtering
+    const total = events.length;
+    const paginatedEvents = events.slice(skip, skip + parseInt(limit));
 
     res.status(200).json({
       success: true,
-      count: events.length,
+      count: paginatedEvents.length,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: events,
+      data: paginatedEvents,
     });
   } catch (error) {
     next(error);
@@ -166,6 +191,22 @@ exports.createEvent = async (req, res, next) => {
           message: `You have reached your monthly urgent post limit (${PREMIUM_URGENT_LIMIT}).`,
         });
       }
+    }
+
+    // Validate dates
+    const { startTime, endTime, deadline } = req.body;
+    if (startTime && endTime && new Date(startTime) >= new Date(endTime)) {
+      return res.status(400).json({
+        success: false,
+        message: "Thời gian kết thúc phải sau thời gian bắt đầu",
+      });
+    }
+
+    if (deadline && startTime && new Date(deadline) > new Date(startTime)) {
+      return res.status(400).json({
+        success: false,
+        message: "Hạn ứng tuyển phải trước thời gian bắt đầu",
+      });
     }
 
     // Create event

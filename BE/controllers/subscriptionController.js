@@ -38,7 +38,7 @@ const PLANS = {
   },
   PREMIUM: {
     name: 'Premium',
-    price: parseInt(process.env.PREMIUM_PRICE) || 499000,
+    price: parseInt(process.env.PREMIUM_PRICE) || 199000,
     duration: parseInt(process.env.PREMIUM_DURATION_DAYS) || 30,
     features: {
       postLimit: parseInt(process.env.PREMIUM_POST_LIMIT) || 50,
