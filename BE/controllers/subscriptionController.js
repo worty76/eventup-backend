@@ -1,4 +1,28 @@
 const { User, Payment } = require('../models');
+const crypto = require('crypto');
+const https = require('https');
+const qs = require('qs');
+
+// Helper function to sort object keys for VNPay
+const sortObject = (obj) => {
+  const sorted = {};
+  const keys = Object.keys(obj).sort();
+  keys.forEach(key => {
+    sorted[key] = obj[key];
+  });
+  return sorted;
+};
+
+// Helper function to format date for VNPay
+const formatDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+};
 
 // Subscription plans
 const PLANS = {
@@ -78,7 +102,6 @@ exports.upgradeToPremium = async (req, res, next) => {
       });
     }
 
-    // Check if already premium
     if (req.user.isPremiumActive()) {
       return res.status(400).json({
         success: false,
@@ -86,36 +109,208 @@ exports.upgradeToPremium = async (req, res, next) => {
       });
     }
 
-    // Create payment intent/order
-    // This is a simplified version - actual implementation depends on payment gateway
-    const paymentData = {
+    // Validate payment method
+    if (!['MOMO', 'VNPAY'].includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment method. Please use MOMO or VNPAY.'
+      });
+    }
+
+    const payment = await Payment.create({
       userId: req.user._id,
       amount: PLANS.PREMIUM.price,
       method: paymentMethod,
       status: 'PENDING',
-      description: 'Premium Subscription Upgrade',
+      description: `Premium Subscription Upgrade - ${PLANS.PREMIUM.duration} days`,
+      transactionId: `TXN-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
       subscriptionData: {
         plan: 'PREMIUM',
         duration: PLANS.PREMIUM.duration
       }
-    };
-
-    // For demo purposes, we'll create a pending payment
-    const payment = await Payment.create(paymentData);
-
-    // In production, you would redirect to payment gateway here
-    // and handle the callback to activate subscription
-
-    res.status(200).json({
-      success: true,
-      message: 'Payment initiated. Complete payment to activate Premium.',
-      data: {
-        paymentId: payment._id,
-        amount: payment.amount,
-        // Payment gateway URL would be here
-        paymentUrl: `/api/payments/${payment._id}/process`
-      }
     });
+
+    // Handle MoMo payment
+    if (paymentMethod === 'MOMO') {
+      try {
+        const accessKey = process.env.MOMO_ACCESS_KEY;
+        const secretKey = process.env.MOMO_SECRET_KEY;
+        const partnerCode = process.env.MOMO_PARTNER_CODE;
+        const redirectUrl = process.env.MOMO_RETURN_URL;
+        const ipnUrl = process.env.MOMO_NOTIFY_URL;
+        
+        const orderId = payment.transactionId;
+        const requestId = orderId;
+        const amount = payment.amount.toString();
+        const orderInfo = payment.description;
+        const extraData = JSON.stringify({
+          paymentId: payment._id.toString(),
+          userId: payment.userId.toString()
+        });
+        const requestType = 'payWithMethod';
+        
+        const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+        
+        const signature = crypto
+          .createHmac('sha256', secretKey)
+          .update(rawSignature)
+          .digest('hex');
+        
+        const requestBody = JSON.stringify({
+          partnerCode,
+          partnerName: 'Job Event Platform',
+          storeId: 'JobEventStore',
+          requestId,
+          amount,
+          orderId,
+          orderInfo,
+          redirectUrl,
+          ipnUrl,
+          lang: 'vi',
+          requestType,
+          autoCapture: true,
+          extraData,
+          orderGroupId: '',
+          signature
+        });
+        
+        // Call MoMo API
+        const momoResponse = await new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'test-payment.momo.vn',
+            port: 443,
+            path: '/v2/gateway/api/create',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(requestBody)
+            }
+          };
+          
+          const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+              try {
+                resolve(JSON.parse(data));
+              } catch (error) {
+                reject(error);
+              }
+            });
+          });
+          
+          req.on('error', reject);
+          req.write(requestBody);
+          req.end();
+        });
+        
+        if (momoResponse.resultCode === 0) {
+          payment.metadata = {
+            momoRequestId: momoResponse.requestId,
+            momoOrderId: momoResponse.orderId
+          };
+          await payment.save();
+          
+          return res.status(200).json({
+            success: true,
+            message: 'Payment created successfully. Redirecting to MoMo...',
+            data: {
+              paymentId: payment._id,
+              amount: payment.amount,
+              method: 'MOMO',
+              paymentUrl: momoResponse.payUrl,
+              qrCodeUrl: momoResponse.qrCodeUrl,
+              deeplink: momoResponse.deeplink
+            }
+          });
+        } else {
+          payment.status = 'FAILED';
+          payment.metadata = { error: momoResponse.message };
+          await payment.save();
+          
+          return res.status(400).json({
+            success: false,
+            message: `MoMo payment failed: ${momoResponse.message}`
+          });
+        }
+      } catch (momoError) {
+        console.error('MoMo API Error:', momoError);
+        payment.status = 'FAILED';
+        await payment.save();
+        
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create MoMo payment',
+          error: momoError.message
+        });
+      }
+    }
+
+    // Handle VNPay payment
+    if (paymentMethod === 'VNPAY') {
+      try {
+        const vnp_TmnCode = process.env.VNPAY_TMN_CODE;
+        const vnp_HashSecret = process.env.VNPAY_HASH_SECRET;
+        const vnp_Url = process.env.VNPAY_URL;
+        const vnp_ReturnUrl = process.env.VNPAY_RETURN_URL;
+        
+        const createDate = formatDate(new Date());
+        const orderId = payment.transactionId;
+        
+        let vnp_Params = {};
+        vnp_Params['vnp_Version'] = '2.1.0';
+        vnp_Params['vnp_Command'] = 'pay';
+        vnp_Params['vnp_TmnCode'] = vnp_TmnCode;
+        vnp_Params['vnp_Locale'] = 'vn';
+        vnp_Params['vnp_CurrCode'] = 'VND';
+        vnp_Params['vnp_TxnRef'] = orderId;
+        vnp_Params['vnp_OrderInfo'] = payment.description;
+        vnp_Params['vnp_OrderType'] = 'other';
+        vnp_Params['vnp_Amount'] = payment.amount * 100;
+        vnp_Params['vnp_ReturnUrl'] = vnp_ReturnUrl;
+        vnp_Params['vnp_IpAddr'] = '127.0.0.1';
+        vnp_Params['vnp_CreateDate'] = createDate;
+        
+        // Sort params
+        vnp_Params = sortObject(vnp_Params);
+        
+        // Create signature
+        const signData = qs.stringify(vnp_Params, { encode: false });
+        const hmac = crypto.createHmac('sha512', vnp_HashSecret);
+        const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+        
+        vnp_Params['vnp_SecureHash'] = signed;
+        
+        // Build payment URL
+        const paymentUrl = vnp_Url + '?' + qs.stringify(vnp_Params, { encode: false });
+        
+        payment.metadata = {
+          vnpayUrl: paymentUrl
+        };
+        await payment.save();
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Payment created successfully. Redirecting to VNPay...',
+          data: {
+            paymentId: payment._id,
+            amount: payment.amount,
+            method: 'VNPAY',
+            paymentUrl
+          }
+        });
+      } catch (vnpayError) {
+        console.error('VNPay Error:', vnpayError);
+        payment.status = 'FAILED';
+        await payment.save();
+        
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create VNPay payment',
+          error: vnpayError.message
+        });
+      }
+    }
   } catch (error) {
     next(error);
   }
@@ -135,8 +330,7 @@ exports.cancelSubscription = async (req, res, next) => {
       });
     }
 
-    // Don't immediately downgrade, let it expire naturally
-    // Or implement immediate cancellation based on business logic
+
     user.subscription.autoRenew = false; // If you have this field
 
     await user.save();
