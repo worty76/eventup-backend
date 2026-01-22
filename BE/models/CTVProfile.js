@@ -82,7 +82,7 @@ const ctvProfileSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-ctvProfileSchema.index({ userId: 1 });
+
 ctvProfileSchema.index({ "reputation.score": -1 });
 ctvProfileSchema.index({ trustScore: -1 });
 
