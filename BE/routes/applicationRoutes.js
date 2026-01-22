@@ -1,15 +1,17 @@
-const express = require('express');
-const { body } = require('express-validator');
-const validate = require('../middleware/validate');
+const express = require("express");
+const { body } = require("express-validator");
+const validate = require("../middleware/validate");
 const {
   applyToEvent,
   getCTVApplications,
   getEventApplications,
   approveApplication,
   rejectApplication,
-  bulkApproveApplications
-} = require('../controllers/applicationController');
-const { protect, isCTV, isBTC, isPremium } = require('../middleware/auth');
+  bulkApproveApplications,
+  bulkRejectApplications,
+  completeApplication,
+} = require("../controllers/applicationController");
+const { protect, isCTV, isBTC, isPremium } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -43,10 +45,13 @@ const router = express.Router();
  *         description: Đã ứng tuyển trước đó hoặc sự kiện không mở
  */
 // CTV routes
-router.post('/events/:eventId/apply', protect, isCTV, [
-  body('coverLetter').optional().isString(),
-  validate
-], applyToEvent);
+router.post(
+  "/events/:eventId/apply",
+  protect,
+  isCTV,
+  [body("coverLetter").optional().isString(), validate],
+  applyToEvent,
+);
 
 /**
  * @swagger
@@ -70,7 +75,7 @@ router.post('/events/:eventId/apply', protect, isCTV, [
  *       200:
  *         description: Danh sách ứng tuyển
  */
-router.get('/ctv/applications', protect, isCTV, getCTVApplications);
+router.get("/ctv/applications", protect, isCTV, getCTVApplications);
 
 /**
  * @swagger
@@ -95,7 +100,12 @@ router.get('/ctv/applications', protect, isCTV, getCTVApplications);
  *         description: Danh sách ứng viên
  */
 // BTC routes
-router.get('/btc/events/:eventId/applications', protect, isBTC, getEventApplications);
+router.get(
+  "/btc/events/:eventId/applications",
+  protect,
+  isBTC,
+  getEventApplications,
+);
 
 /**
  * @swagger
@@ -123,10 +133,13 @@ router.get('/btc/events/:eventId/applications', protect, isBTC, getEventApplicat
  *       200:
  *         description: Chấp nhận thành công
  */
-router.post('/:id/approve', protect, isBTC, [
-  body('assignedRole').optional().isString(),
-  validate
-], approveApplication);
+router.post(
+  "/:id/approve",
+  protect,
+  isBTC,
+  [body("assignedRole").optional().isString(), validate],
+  approveApplication,
+);
 
 /**
  * @swagger
@@ -154,10 +167,35 @@ router.post('/:id/approve', protect, isBTC, [
  *       200:
  *         description: Từ chối thành công
  */
-router.post('/:id/reject', protect, isBTC, [
-  body('rejectionReason').optional().isString(),
-  validate
-], rejectApplication);
+router.post(
+  "/:id/reject",
+  protect,
+  isBTC,
+  [body("rejectionReason").optional().isString(), validate],
+  rejectApplication,
+);
+
+/**
+ * @swagger
+ * /api/applications/{id}/complete:
+ *   post:
+ *     summary: Đánh dấu hoàn thành ứng viên (BTC)
+ *     tags: [Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Hoàn thành thành công
+ *       400:
+ *         description: Chỉ application đã duyệt mới có thể hoàn thành
+ */
+router.post("/:id/complete", protect, isBTC, completeApplication);
 
 /**
  * @swagger
@@ -189,10 +227,64 @@ router.post('/:id/reject', protect, isBTC, [
  *         description: Yêu cầu gói Premium
  */
 // Premium feature
-router.post('/bulk-approve', protect, isBTC, isPremium, [
-  body('applicationIds').isArray().withMessage('Application IDs must be an array'),
-  body('role').optional().isString(),
-  validate
-], bulkApproveApplications);
+// Premium feature
+router.post(
+  "/bulk-approve",
+  protect,
+  isBTC,
+  isPremium,
+  [
+    body("applicationIds")
+      .isArray()
+      .withMessage("Application IDs must be an array"),
+    body("role").optional().isString(),
+    validate,
+  ],
+  bulkApproveApplications,
+);
+
+/**
+ * @swagger
+ * /api/applications/bulk-reject:
+ *   post:
+ *     summary: Từ chối nhiều ứng viên cùng lúc (BTC Premium)
+ *     tags: [Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - applicationIds
+ *             properties:
+ *               applicationIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               rejectionReason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Từ chối thành công
+ *       403:
+ *         description: Yêu cầu gói Premium
+ */
+router.post(
+  "/bulk-reject",
+  protect,
+  isBTC,
+  isPremium,
+  [
+    body("applicationIds")
+      .isArray()
+      .withMessage("Application IDs must be an array"),
+    body("rejectionReason").optional().isString(),
+    validate,
+  ],
+  bulkRejectApplications,
+);
 
 module.exports = router;

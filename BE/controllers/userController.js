@@ -1,4 +1,4 @@
-const { User, CTVProfile, BTCProfile } = require('../models');
+const { User, CTVProfile, BTCProfile } = require("../models");
 
 // @desc    Get current user profile
 // @route   GET /api/users/me
@@ -8,9 +8,9 @@ exports.getMe = async (req, res, next) => {
     const user = await User.findById(req.user._id);
 
     let profile = null;
-    if (user.role === 'CTV') {
+    if (user.role === "CTV") {
       profile = await CTVProfile.findOne({ userId: user._id });
-    } else if (user.role === 'BTC') {
+    } else if (user.role === "BTC") {
       profile = await BTCProfile.findOne({ userId: user._id });
     }
 
@@ -18,8 +18,8 @@ exports.getMe = async (req, res, next) => {
       success: true,
       data: {
         user,
-        profile
-      }
+        profile,
+      },
     });
   } catch (error) {
     next(error);
@@ -40,23 +40,23 @@ exports.updateMe = async (req, res, next) => {
 
     // Update profile based on role
     let profile;
-    if (req.user.role === 'CTV') {
+    if (req.user.role === "CTV") {
       profile = await CTVProfile.findOneAndUpdate(
         { userId: req.user._id },
         profileData,
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
-    } else if (req.user.role === 'BTC') {
+    } else if (req.user.role === "BTC") {
       profile = await BTCProfile.findOneAndUpdate(
         { userId: req.user._id },
         profileData,
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
     }
 
     res.status(200).json({
       success: true,
-      data: profile
+      data: profile,
     });
   } catch (error) {
     next(error);
@@ -68,19 +68,21 @@ exports.updateMe = async (req, res, next) => {
 // @access  Private (CTV only)
 exports.getCTVCV = async (req, res, next) => {
   try {
-    const profile = await CTVProfile.findOne({ userId: req.user._id })
-      .populate('joinedEvents.eventId', 'title eventType startTime endTime');
+    const profile = await CTVProfile.findOne({ userId: req.user._id }).populate(
+      "joinedEvents.eventId",
+      "title eventType startTime endTime",
+    );
 
     if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Profile not found'
+      return res.status(200).json({
+        success: true,
+        data: null,
       });
     }
 
     res.status(200).json({
       success: true,
-      data: profile
+      data: profile,
     });
   } catch (error) {
     next(error);
@@ -97,19 +99,17 @@ exports.updateCTVCV = async (req, res, next) => {
     const profile = await CTVProfile.findOneAndUpdate(
       { userId: req.user._id },
       { fullName, avatar, gender, address, skills, experiences },
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
     );
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Profile not found'
-      });
-    }
 
     res.status(200).json({
       success: true,
-      data: profile
+      data: profile,
     });
   } catch (error) {
     next(error);
@@ -121,19 +121,21 @@ exports.updateCTVCV = async (req, res, next) => {
 // @access  Private (BTC only)
 exports.getBTCProfile = async (req, res, next) => {
   try {
-    const profile = await BTCProfile.findOne({ userId: req.user._id })
-      .populate('successfulEvents', 'title eventType startTime endTime');
+    const profile = await BTCProfile.findOne({ userId: req.user._id }).populate(
+      "successfulEvents",
+      "title eventType startTime endTime poster location salary description urgent status",
+    );
 
     if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Profile not found'
+      return res.status(200).json({
+        success: true,
+        data: null,
       });
     }
 
     res.status(200).json({
       success: true,
-      data: profile
+      data: profile,
     });
   } catch (error) {
     next(error);
@@ -145,24 +147,23 @@ exports.getBTCProfile = async (req, res, next) => {
 // @access  Private (BTC only)
 exports.updateBTCProfile = async (req, res, next) => {
   try {
-    const { agencyName, logo, address, website, fanpage, description } = req.body;
+    const { agencyName, logo, address, website, fanpage, description } =
+      req.body;
 
     const profile = await BTCProfile.findOneAndUpdate(
       { userId: req.user._id },
       { agencyName, logo, address, website, fanpage, description },
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
     );
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Profile not found'
-      });
-    }
 
     res.status(200).json({
       success: true,
-      data: profile
+      data: profile,
     });
   } catch (error) {
     next(error);

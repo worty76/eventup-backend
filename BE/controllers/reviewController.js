@@ -1,4 +1,10 @@
-const { Review, Event, Application, BTCProfile, CTVProfile } = require('../models');
+const {
+  Review,
+  Event,
+  Application,
+  BTCProfile,
+  CTVProfile,
+} = require("../models");
 
 // @desc    CTV review BTC
 // @route   POST /api/reviews/btc
@@ -13,7 +19,7 @@ exports.reviewBTC = async (req, res, next) => {
     if (!event) {
       return res.status(404).json({
         success: false,
-        message: 'Event not found'
+        message: "Event not found",
       });
     }
 
@@ -21,13 +27,13 @@ exports.reviewBTC = async (req, res, next) => {
     const application = await Application.findOne({
       eventId,
       ctvId,
-      status: 'COMPLETED'
+      status: "COMPLETED",
     });
 
     if (!application) {
       return res.status(403).json({
         success: false,
-        message: 'You can only review events you have completed'
+        message: "You can only review events you have completed",
       });
     }
 
@@ -36,13 +42,13 @@ exports.reviewBTC = async (req, res, next) => {
       eventId,
       fromUser: ctvId,
       toUser: event.btcId,
-      reviewType: 'CTV_TO_BTC'
+      reviewType: "CTV_TO_BTC",
     });
 
     if (existingReview) {
       return res.status(400).json({
         success: false,
-        message: 'You have already reviewed this BTC for this event'
+        message: "You have already reviewed this BTC for this event",
       });
     }
 
@@ -51,9 +57,9 @@ exports.reviewBTC = async (req, res, next) => {
       eventId,
       fromUser: ctvId,
       toUser: event.btcId,
-      reviewType: 'CTV_TO_BTC',
+      reviewType: "CTV_TO_BTC",
       rating,
-      comment
+      comment,
     });
 
     // Update BTC rating
@@ -65,7 +71,7 @@ exports.reviewBTC = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      data: review
+      data: review,
     });
   } catch (error) {
     next(error);
@@ -85,14 +91,14 @@ exports.reviewCTV = async (req, res, next) => {
     if (!event) {
       return res.status(404).json({
         success: false,
-        message: 'Event not found'
+        message: "Event not found",
       });
     }
 
     if (event.btcId.toString() !== btcId.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to review for this event'
+        message: "Not authorized to review for this event",
       });
     }
 
@@ -100,13 +106,13 @@ exports.reviewCTV = async (req, res, next) => {
     const application = await Application.findOne({
       eventId,
       ctvId,
-      status: 'COMPLETED'
+      status: "COMPLETED",
     });
 
     if (!application) {
       return res.status(400).json({
         success: false,
-        message: 'CTV did not complete this event'
+        message: "CTV did not complete this event",
       });
     }
 
@@ -115,13 +121,13 @@ exports.reviewCTV = async (req, res, next) => {
       eventId,
       fromUser: btcId,
       toUser: ctvId,
-      reviewType: 'BTC_TO_CTV'
+      reviewType: "BTC_TO_CTV",
     });
 
     if (existingReview) {
       return res.status(400).json({
         success: false,
-        message: 'You have already reviewed this CTV for this event'
+        message: "You have already reviewed this CTV for this event",
       });
     }
 
@@ -130,10 +136,10 @@ exports.reviewCTV = async (req, res, next) => {
       eventId,
       fromUser: btcId,
       toUser: ctvId,
-      reviewType: 'BTC_TO_CTV',
+      reviewType: "BTC_TO_CTV",
       skill,
       attitude,
-      comment
+      comment,
     });
 
     // Update CTV reputation
@@ -141,12 +147,18 @@ exports.reviewCTV = async (req, res, next) => {
     if (ctvProfile) {
       const avgRating = (skill + attitude) / 2;
       ctvProfile.updateReputation(avgRating);
+
+      // Update Trust Score: -2 if rating is poor (< 3)
+      if (avgRating < 3) {
+        ctvProfile.updateTrustScore(-2);
+      }
+
       await ctvProfile.save();
     }
 
     res.status(201).json({
       success: true,
-      data: review
+      data: review,
     });
   } catch (error) {
     next(error);
@@ -164,8 +176,8 @@ exports.getUserReviews = async (req, res, next) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const reviews = await Review.find({ toUser: userId })
-      .populate('fromUser', 'email role')
-      .populate('eventId', 'title eventType')
+      .populate("fromUser", "email role")
+      .populate("eventId", "title eventType")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -178,7 +190,7 @@ exports.getUserReviews = async (req, res, next) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: reviews
+      data: reviews,
     });
   } catch (error) {
     next(error);
