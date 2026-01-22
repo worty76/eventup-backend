@@ -1,13 +1,15 @@
-const express = require('express');
+const express = require("express");
 const {
   getMe,
   updateMe,
   getCTVCV,
   updateCTVCV,
   getBTCProfile,
-  updateBTCProfile
-} = require('../controllers/userController');
-const { protect, isCTV, isBTC } = require('../middleware/auth');
+  updateBTCProfile,
+  getPublicBTCProfile,
+  getPublicCTVProfile,
+} = require("../controllers/userController");
+const { protect, isCTV, isBTC } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -26,7 +28,7 @@ const router = express.Router();
  *         description: Không có quyền truy cập
  */
 // General user routes
-router.get('/me', protect, getMe);
+router.get("/me", protect, getMe);
 
 /**
  * @swagger
@@ -48,7 +50,7 @@ router.get('/me', protect, getMe);
  *       200:
  *         description: Cập nhật thành công
  */
-router.put('/me', protect, updateMe);
+router.put("/me", protect, updateMe);
 
 /**
  * @swagger
@@ -65,7 +67,7 @@ router.put('/me', protect, updateMe);
  *         description: Chỉ CTV mới được truy cập
  */
 // CTV specific routes
-router.get('/ctv/cv', protect, isCTV, getCTVCV);
+router.get("/ctv/cv", protect, isCTV, getCTVCV);
 
 /**
  * @swagger
@@ -95,7 +97,7 @@ router.get('/ctv/cv', protect, isCTV, getCTVCV);
  *       200:
  *         description: Cập nhật thành công
  */
-router.put('/ctv/cv', protect, isCTV, updateCTVCV);
+router.put("/ctv/cv", protect, isCTV, updateCTVCV);
 
 /**
  * @swagger
@@ -110,7 +112,7 @@ router.put('/ctv/cv', protect, isCTV, updateCTVCV);
  *         description: Thông tin BTC
  */
 // BTC specific routes
-router.get('/btc/profile', protect, isBTC, getBTCProfile);
+router.get("/btc/profile", protect, isBTC, getBTCProfile);
 
 /**
  * @swagger
@@ -136,6 +138,46 @@ router.get('/btc/profile', protect, isBTC, getBTCProfile);
  *       200:
  *         description: Cập nhật thành công
  */
-router.put('/btc/profile', protect, isBTC, updateBTCProfile);
+router.put("/btc/profile", protect, isBTC, updateBTCProfile);
+
+/**
+ * @swagger
+ * /api/users/btc/{id}/public:
+ *   get:
+ *     summary: Lấy profile công khai của BTC
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Thông tin BTC công khai
+ *       404:
+ *         description: Không tìm thấy hồ sơ
+ */
+router.get("/btc/:id/public", getPublicBTCProfile);
+
+/**
+ * @swagger
+ * /api/users/ctv/{id}/public:
+ *   get:
+ *     summary: Lấy profile công khai của CTV
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Thông tin CTV công khai
+ *       404:
+ *         description: Không tìm thấy hồ sơ
+ */
+router.get("/ctv/:id/public", getPublicCTVProfile);
 
 module.exports = router;
