@@ -466,3 +466,117 @@ exports.completeApplication = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Get CTV dashboard stats
+// @route   GET /api/applications/ctv/dashboard/stats
+// @access  Private (CTV)
+exports.getCTVDashboardStats = async (req, res, next) => {
+  try {
+    const ctvId = req.user._id;
+
+    // 1. Total applications
+    const totalApplications = await Application.countDocuments({ ctvId });
+
+    // 2. Approved/Completed count
+    const approvedCount = await Application.countDocuments({
+      ctvId,
+      status: "APPROVED",
+    });
+
+    const completedCount = await Application.countDocuments({
+      ctvId,
+      status: "COMPLETED",
+    });
+
+    // 3. Pending count
+    const pendingCount = await Application.countDocuments({
+      ctvId,
+      status: "PENDING",
+    });
+
+    // 4. Rejected count
+    const rejectedCount = await Application.countDocuments({
+      ctvId,
+      status: "REJECTED",
+    });
+
+    // 5. Get upcoming events (approved applications for future events)
+    const upcomingEvents = await Application.find({
+      ctvId,
+      status: { $in: ["APPROVED"] },
+    })
+      .populate({
+        path: "eventId",
+        select: "title location startTime endTime eventType",
+        match: { startTime: { $gte: new Date() } },
+      })
+      .limit(5)
+      .sort({ "eventId.startTime": 1 });
+
+    const upcomingEventsFiltered = upcomingEvents
+      .filter((app) => app.eventId)
+      .map((app) => ({
+        _id: app.eventId._id,
+        title: app.eventId.title,
+        location: app.eventId.location,
+        startTime: app.eventId.startTime,
+        endTime: app.eventId.endTime,
+        eventType: app.eventId.eventType,
+        role: app.assignedRole,
+      }));
+
+    // 6. Chart Data (Applications by status for pie chart or last 7 days activity)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const recentActivity = await Application.aggregate([
+      {
+        $match: {
+          ctvId: req.user._id,
+          updatedAt: { $gte: sevenDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$updatedAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill missing days
+    const chartData = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dateString = d.toISOString().split("T")[0];
+      const found = recentActivity.find((a) => a._id === dateString);
+
+      const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+
+      chartData.push({
+        name: displayDate,
+        fullDate: dateString,
+        value: found ? found.count : 0,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalApplications,
+        approvedCount,
+        completedCount,
+        pendingCount,
+        rejectedCount,
+        eventsJoined: completedCount, // Completed = events joined
+        upcomingEvents: upcomingEventsFiltered,
+        chartData,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
