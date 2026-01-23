@@ -1,11 +1,12 @@
-const express = require('express');
+const express = require("express");
 const {
   getPayments,
+  getPaymentByTransactionId,
   vnpayReturn,
   momoReturn,
-  momoNotify
-} = require('../controllers/paymentController');
-const { protect } = require('../middleware/auth');
+  momoNotify,
+} = require("../controllers/paymentController");
+const { protect } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -31,7 +32,29 @@ const router = express.Router();
  *       200:
  *         description: Danh sách thanh toán
  */
-router.get('/', protect, getPayments);
+router.get("/", protect, getPayments);
+
+/**
+ * @swagger
+ * /api/payments/transaction/{transactionId}:
+ *   get:
+ *     summary: Lấy chi tiết thanh toán theo mã giao dịch
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Chi tiết thanh toán
+ *       404:
+ *         description: Không tìm thấy giao dịch
+ */
+router.get("/transaction/:transactionId", protect, getPaymentByTransactionId);
 
 /**
  * @swagger
@@ -43,7 +66,7 @@ router.get('/', protect, getPayments);
  *       200:
  *         description: VNPay return processed
  */
-router.get('/vnpay/return', vnpayReturn);
+router.get("/vnpay/return", vnpayReturn);
 
 /**
  * @swagger
@@ -55,7 +78,7 @@ router.get('/vnpay/return', vnpayReturn);
  *       302:
  *         description: Redirect to frontend
  */
-router.get('/momo/return', momoReturn);
+router.get("/momo/return", momoReturn);
 
 /**
  * @swagger
@@ -67,6 +90,6 @@ router.get('/momo/return', momoReturn);
  *       200:
  *         description: MoMo notification processed
  */
-router.post('/momo/notify', momoNotify);
+router.post("/momo/notify", momoNotify);
 
 module.exports = router;

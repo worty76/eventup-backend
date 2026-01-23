@@ -382,7 +382,7 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "amount": 499000,
+  "amount": 199000,
   "method": "MOMO",
   "description": "Premium subscription"
 }

@@ -10,10 +10,25 @@ const {
   bulkApproveApplications,
   bulkRejectApplications,
   completeApplication,
+  getCTVDashboardStats,
 } = require("../controllers/applicationController");
 const { protect, isCTV, isBTC, isPremium } = require("../middleware/auth");
 
 const router = express.Router();
+
+/**
+ * @swagger
+ * /api/applications/ctv/dashboard/stats:
+ *   get:
+ *     summary: Lấy thống kê dashboard cho CTV
+ *     tags: [Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thống kê dashboard CTV
+ */
+router.get("/ctv/dashboard/stats", protect, isCTV, getCTVDashboardStats);
 
 /**
  * @swagger
