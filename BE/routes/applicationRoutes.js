@@ -11,6 +11,7 @@ const {
   bulkRejectApplications,
   completeApplication,
   getCTVDashboardStats,
+  reportViolation,
 } = require("../controllers/applicationController");
 const { protect, isCTV, isBTC, isPremium } = require("../middleware/auth");
 
@@ -211,6 +212,42 @@ router.post(
  *         description: Chỉ application đã duyệt mới có thể hoàn thành
  */
 router.post("/:id/complete", protect, isBTC, completeApplication);
+
+/**
+ * @swagger
+ * /api/applications/{id}/violation:
+ *   post:
+ *     summary: Báo cáo vi phạm (BTC)
+ *     tags: [Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Báo cáo thành công
+ *       400:
+ *         description: Chỉ application đã duyệt mới có thể báo cáo
+ */
+router.post(
+  "/:id/violation",
+  protect,
+  isBTC,
+  [body("reason").optional().isString(), validate],
+  reportViolation,
+);
 
 /**
  * @swagger
