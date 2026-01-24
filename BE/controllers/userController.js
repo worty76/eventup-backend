@@ -9,9 +9,15 @@ exports.getMe = async (req, res, next) => {
 
     let profile = null;
     if (user.role === "CTV") {
-      profile = await CTVProfile.findOne({ userId: user._id });
+      profile = await CTVProfile.findOne({ userId: user._id }).populate(
+        "joinedEvents.eventId",
+        "title eventType startTime endTime poster location status",
+      );
     } else if (user.role === "BTC") {
-      profile = await BTCProfile.findOne({ userId: user._id });
+      profile = await BTCProfile.findOne({ userId: user._id }).populate(
+        "successfulEvents",
+        "title eventType startTime endTime poster location salary description urgent status",
+      );
     }
 
     res.status(200).json({

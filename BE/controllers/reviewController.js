@@ -4,7 +4,9 @@ const {
   Application,
   BTCProfile,
   CTVProfile,
+  Notification,
 } = require("../models");
+const emailService = require("../utils/email");
 
 // @desc    CTV review BTC
 // @route   POST /api/reviews/btc
@@ -27,7 +29,7 @@ exports.reviewBTC = async (req, res, next) => {
     const application = await Application.findOne({
       eventId,
       ctvId,
-      status: "COMPLETED",
+      status: { $in: ["COMPLETED", "NO_SHOW"] },
     });
 
     if (!application) {
@@ -69,6 +71,51 @@ exports.reviewBTC = async (req, res, next) => {
       await btcProfile.save();
     }
 
+    // --- Notification System ---
+    try {
+      // 1. In-app Notification
+      const notification = await Notification.create({
+        userId: event.btcId,
+        type: "REVIEW",
+        title: "New Review Received",
+        content: `You received a review for event "${event.title}"`,
+        relatedId: review._id,
+        relatedModel: "Review",
+      });
+
+      // 2. Real-time Socket Notification
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user_${event.btcId.toString()}`).emit(
+          "new_notification",
+          notification,
+        );
+      }
+
+      // 3. Email Notification
+      // Fetch BTC email
+      const btcUser = await require("../models/User").findById(event.btcId);
+      if (btcUser) {
+        await emailService.sendEmail({
+          to: btcUser.email,
+          subject: "New Review Received",
+          text: `You have received a new review from a CTV for event: ${event.title}. Log in to view details.`,
+          html: `
+             <div>
+               <h2>New Review Received</h2>
+               <p>A CTV has reviewed your event: <strong>${event.title}</strong></p>
+               <p>Rating: ${rating}/5</p>
+               <p>Comment: ${comment || "No comment"}</p>
+               <a href="${process.env.CLIENT_URL || "http://localhost:3000"}/dashboard/reviews">View Reviews</a>
+             </div>
+           `,
+        });
+      }
+    } catch (notifyError) {
+      console.error("Notification Error:", notifyError);
+      // Continue execution, don't fail the request
+    }
+
     res.status(201).json({
       success: true,
       data: review,
@@ -106,7 +153,7 @@ exports.reviewCTV = async (req, res, next) => {
     const application = await Application.findOne({
       eventId,
       ctvId,
-      status: "COMPLETED",
+      status: { $in: ["COMPLETED", "NO_SHOW"] },
     });
 
     if (!application) {
@@ -156,6 +203,51 @@ exports.reviewCTV = async (req, res, next) => {
       await ctvProfile.save();
     }
 
+    // --- Notification System ---
+    try {
+      // 1. In-app Notification
+      const notification = await Notification.create({
+        userId: ctvId,
+        type: "REVIEW",
+        title: "New Review Received",
+        content: `You received a review from BTC for event "${event.title}"`,
+        relatedId: review._id,
+        relatedModel: "Review",
+      });
+
+      // 2. Real-time Socket Notification
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user_${ctvId.toString()}`).emit(
+          "new_notification",
+          notification,
+        );
+      }
+
+      // 3. Email Notification
+      // Fetch CTV email
+      const ctvUser = await require("../models/User").findById(ctvId);
+      if (ctvUser) {
+        await emailService.sendEmail({
+          to: ctvUser.email,
+          subject: "New Review Received",
+          text: `You have received a new review from the organizer of event: ${event.title}. Log in to view details.`,
+          html: `
+             <div>
+               <h2>New Review from Organizer</h2>
+               <p>The organizer of <strong>${event.title}</strong> has reviewed your performance.</p>
+               <p>Skill: ${skill}/5, Attitude: ${attitude}/5</p>
+               <p>Comment: ${comment || "No comment"}</p>
+               <a href="${process.env.CLIENT_URL || "http://localhost:3000"}/dashboard/my-jobs">View Details</a>
+             </div>
+           `,
+        });
+      }
+    } catch (notifyError) {
+      console.error("Notification Error:", notifyError);
+      // Continue execution
+    }
+
     res.status(201).json({
       success: true,
       data: review,
@@ -191,6 +283,217 @@ exports.getUserReviews = async (req, res, next) => {
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
       data: reviews,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Check if review exists
+// @route   GET /api/reviews/check
+// @access  Private
+exports.checkReviewStatus = async (req, res, next) => {
+  try {
+    const { eventId, toUserId, reviewType } = req.query;
+    const fromUserId = req.user._id;
+
+    if (!eventId || !toUserId || !reviewType) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters",
+      });
+    }
+
+    const review = await Review.findOne({
+      eventId,
+      fromUser: fromUserId,
+      toUser: toUserId,
+      reviewType,
+    });
+
+    res.status(200).json({
+      success: true,
+      hasReviewed: !!review,
+      review: review || null,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update review
+// @route   PUT /api/reviews/:id
+// @access  Private
+exports.updateReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment, skill, attitude } = req.body;
+    const userId = req.user._id;
+
+    // Find review
+    const review = await Review.findById(id);
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found",
+      });
+    }
+
+    // Check ownership
+    if (review.fromUser.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this review",
+      });
+    }
+
+    // Logic for CTV updates (Reviewing BTC)
+    if (review.reviewType === "CTV_TO_BTC") {
+      const btcProfile = await BTCProfile.findOne({ userId: review.toUser });
+      if (btcProfile && typeof rating === "number") {
+        // Revert old rating physics
+        // oldTotalScore = average * totalReviews
+        // newTotalScore = oldTotalScore - oldRating + newRating
+        // newAverage = newTotalScore / totalReviews
+        const oldRating = review.rating;
+        const currentTotalScore =
+          btcProfile.rating.average * btcProfile.rating.totalReviews;
+        const newTotalScore = currentTotalScore - oldRating + rating;
+        const newAverage = newTotalScore / btcProfile.rating.totalReviews;
+
+        btcProfile.rating.average = Math.max(0, Math.min(5, newAverage));
+        await btcProfile.save();
+
+        review.rating = rating;
+      }
+    }
+
+    // Logic for BTC updates (Reviewing CTV)
+    if (review.reviewType === "BTC_TO_CTV") {
+      const ctvProfile = await CTVProfile.findOne({ userId: review.toUser });
+      if (
+        ctvProfile &&
+        typeof skill === "number" &&
+        typeof attitude === "number"
+      ) {
+        // Calculate averages
+        const oldAvg = (review.skill + review.attitude) / 2;
+        const newAvg = (skill + attitude) / 2;
+
+        // Revert old reputation physics
+        const currentTotalScore =
+          ctvProfile.reputation.average * ctvProfile.reputation.totalReviews;
+        const newTotalScore = currentTotalScore - oldAvg + newAvg;
+        const newAverage = newTotalScore / ctvProfile.reputation.totalReviews;
+
+        ctvProfile.reputation.average = Math.max(0, Math.min(5, newAverage));
+
+        // Trust Score logic: If moving from < 3 to >= 3, revert penalty?
+        // Or if moving from >= 3 to < 3, apply penalty?
+        // Given complexity, let's keep it simple:
+        // If newAvg < 3 and oldAvg >= 3: Deduct
+        // If newAvg >= 3 and oldAvg < 3: Restore (add back 2)
+        if (newAvg < 3 && oldAvg >= 3) {
+          ctvProfile.updateTrustScore(-2);
+        } else if (newAvg >= 3 && oldAvg < 3) {
+          ctvProfile.updateTrustScore(2);
+        }
+
+        await ctvProfile.save();
+
+        review.skill = skill;
+        review.attitude = attitude;
+      }
+    }
+
+    if (comment !== undefined) review.comment = comment;
+    await review.save();
+
+    res.status(200).json({
+      success: true,
+      data: review,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete review
+// @route   DELETE /api/reviews/:id
+// @access  Private
+exports.deleteReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const review = await Review.findById(id);
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found",
+      });
+    }
+
+    if (review.fromUser.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this review",
+      });
+    }
+
+    // Revert Rating Logic
+    if (review.reviewType === "CTV_TO_BTC") {
+      const btcProfile = await BTCProfile.findOne({ userId: review.toUser });
+      if (btcProfile) {
+        // Revert average
+        // newAvg = (currentTotal - oldRating) / (total - 1)
+        const currentTotalScore =
+          btcProfile.rating.average * btcProfile.rating.totalReviews;
+        const newTotalScore = currentTotalScore - review.rating;
+        const newTotalReviews = btcProfile.rating.totalReviews - 1;
+
+        if (newTotalReviews > 0) {
+          btcProfile.rating.average = newTotalScore / newTotalReviews;
+        } else {
+          btcProfile.rating.average = 0;
+        }
+        btcProfile.rating.totalReviews = Math.max(0, newTotalReviews);
+        await btcProfile.save();
+      }
+    }
+
+    if (review.reviewType === "BTC_TO_CTV") {
+      const ctvProfile = await CTVProfile.findOne({ userId: review.toUser });
+      if (ctvProfile) {
+        const avgRating = (review.skill + review.attitude) / 2;
+
+        // Revert average
+        const currentTotalScore =
+          ctvProfile.reputation.average * ctvProfile.reputation.totalReviews;
+        const newTotalScore = currentTotalScore - avgRating;
+        const newTotalReviews = ctvProfile.reputation.totalReviews - 1;
+
+        if (newTotalReviews > 0) {
+          ctvProfile.reputation.average = newTotalScore / newTotalReviews;
+        } else {
+          ctvProfile.reputation.average = 0;
+        }
+        ctvProfile.reputation.totalReviews = Math.max(0, newTotalReviews);
+
+        // Revert Trust Score penalty if applicable
+        if (avgRating < 3) {
+          ctvProfile.updateTrustScore(2); // Add back the 2 points
+        }
+
+        await ctvProfile.save();
+      }
+    }
+
+    await review.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: "Review deleted successfully",
     });
   } catch (error) {
     next(error);
