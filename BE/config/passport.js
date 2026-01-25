@@ -9,17 +9,15 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      // Check if user already exists
       let user = await User.findOne({ email: profile.emails[0].value });
 
       if (user) {
         return done(null, user);
       }
 
-      // Create new user if doesn't exist
       user = await User.create({
         email: profile.emails[0].value,
-        role: 'CTV', // Default role
+        role: 'CTV', 
         isEmailVerified: true,
         status: 'ACTIVE',
         googleId: profile.id

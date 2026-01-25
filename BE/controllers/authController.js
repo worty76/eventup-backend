@@ -7,21 +7,18 @@ const { OAuth2Client } = require("google-auth-library");
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE,
   });
 };
 
-// Generate Refresh Token
 const generateRefreshToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRE,
   });
 };
 
-// Send token response
 const sendTokenResponse = (user, statusCode, res) => {
   const token = generateToken(user._id);
   const refreshToken = generateRefreshToken(user._id);
@@ -55,7 +52,6 @@ exports.registerCTV = async (req, res, next) => {
   try {
     const { email, password, fullName, phone, gender, address } = req.body;
 
-    // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -64,16 +60,14 @@ exports.registerCTV = async (req, res, next) => {
       });
     }
 
-    // Create user
     const user = await User.create({
       email,
       passwordHash: password,
       role: "CTV",
       phone,
-      status: "PENDING", // Need to verify email
+      status: "PENDING",
     });
 
-    // Create CTV profile
     await CTVProfile.create({
       userId: user._id,
       fullName,
@@ -81,7 +75,6 @@ exports.registerCTV = async (req, res, next) => {
       address,
     });
 
-    // Generate OTP and send verification email
     const otp = crypto.randomInt(100000, 999999).toString();
     user.otp = {
       code: otp,
@@ -91,7 +84,6 @@ exports.registerCTV = async (req, res, next) => {
     };
     await user.save();
 
-    // Send OTP email
     await sendEmail({
       to: email,
       subject: "Verify Your Account",
@@ -114,9 +106,8 @@ exports.registerCTV = async (req, res, next) => {
 // @access  Public
 exports.registerBTC = async (req, res, next) => {
   try {
-    const { email, password, agencyName, phone, address, logoUrl } = req.body;
+    const { email, password, agencyName, phone, address } = req.body;
 
-    // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -125,7 +116,6 @@ exports.registerBTC = async (req, res, next) => {
       });
     }
 
-    // Create user
     const user = await User.create({
       email,
       passwordHash: password,
@@ -134,15 +124,13 @@ exports.registerBTC = async (req, res, next) => {
       status: "PENDING",
     });
 
-    // Create BTC profile
     await BTCProfile.create({
       userId: user._id,
       agencyName,
       address,
-      logo: logoUrl,
+      logo: "",
     });
 
-    // Generate OTP
     const otp = crypto.randomInt(100000, 999999).toString();
     user.otp = {
       code: otp,
@@ -152,7 +140,6 @@ exports.registerBTC = async (req, res, next) => {
     };
     await user.save();
 
-    // Send OTP email
     await sendEmail({
       to: email,
       subject: "Verify Your Account",
@@ -185,7 +172,6 @@ exports.sendOTP = async (req, res, next) => {
       });
     }
 
-    // Generate OTP
     const otp = crypto.randomInt(100000, 999999).toString();
     user.otp = {
       code: otp,
@@ -195,7 +181,6 @@ exports.sendOTP = async (req, res, next) => {
     };
     await user.save();
 
-    // Send OTP email
     await sendEmail({
       to: email,
       subject: "Your OTP Code",
@@ -247,7 +232,6 @@ exports.verifyOTP = async (req, res, next) => {
       });
     }
 
-    // Verify user
     user.isEmailVerified = true;
     user.status = "ACTIVE";
     user.otp = undefined;
@@ -266,7 +250,6 @@ exports.login = async (req, res, next) => {
   try {
     const { email, password, role } = req.body;
 
-    // Validate input
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -274,7 +257,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Check for user
     const user = await User.findOne({ email }).select("+passwordHash");
     if (!user) {
       return res.status(401).json({
@@ -283,7 +265,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Check role if provided
     if (role && user.role !== role) {
       return res.status(401).json({
         success: false,
@@ -291,7 +272,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
@@ -300,7 +280,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Check if account is active
     if (user.status === "BLOCKED") {
       return res.status(403).json({
         success: false,
@@ -372,11 +351,8 @@ exports.googleLogin = async (req, res, next) => {
       });
     }
 
-    // Verify Google Token (Access Token approach)
-    // Verify token info to get sub (googleId) and validate audience (optional but recommended)
     const tokenInfo = await client.getTokenInfo(idToken);
 
-    // Fetch User Info using Access Token
     const userInfoResponse = await fetch(
       `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${idToken}`,
     );
@@ -388,18 +364,15 @@ exports.googleLogin = async (req, res, next) => {
 
     const { email, name, picture, sub: googleId } = userInfo;
 
-    // Check if user exists
     let user = await User.findOne({ email });
 
     if (user) {
-      // If user exists but no googleId (registered via email/password), link it
       if (!user.googleId) {
         user.googleId = googleId;
-        user.isEmailVerified = true; // Google email is verified
+        user.isEmailVerified = true;
         await user.save();
       }
 
-      // If user is BLOCKED
       if (user.status === "BLOCKED") {
         return res.status(403).json({
           success: false,
@@ -410,7 +383,6 @@ exports.googleLogin = async (req, res, next) => {
       return sendTokenResponse(user, 200, res);
     }
 
-    // New User - Role is required
     if (!role) {
       return res.status(400).json({
         success: false,
@@ -418,17 +390,15 @@ exports.googleLogin = async (req, res, next) => {
       });
     }
 
-    // Create User
     user = await User.create({
       email,
       role,
       googleId,
       status: "ACTIVE",
       isEmailVerified: true,
-      passwordHash: await crypto.randomBytes(32).toString("hex"), // Random password
+      passwordHash: await crypto.randomBytes(32).toString("hex"),
     });
 
-    // Create Profile
     if (role === "CTV") {
       await CTVProfile.create({
         userId: user._id,
@@ -439,7 +409,7 @@ exports.googleLogin = async (req, res, next) => {
     } else if (role === "BTC") {
       await BTCProfile.create({
         userId: user._id,
-        agencyName: name, // Default to Google Name
+        agencyName: name,
         logo: picture,
         verified: false,
       });

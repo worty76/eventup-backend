@@ -1,6 +1,6 @@
 const cloudinary = require("cloudinary").v2;
 
-// Configure Cloudinary
+// Config
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -19,9 +19,8 @@ exports.uploadFile = async (req, res, next) => {
       });
     }
 
-    const { type = "general" } = req.body; // avatar, logo, poster, general
+    const { type = 'general' } = req.body; 
 
-    // Upload to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {

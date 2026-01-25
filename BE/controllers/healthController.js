@@ -32,7 +32,6 @@ exports.healthCheckDetails = async (req, res) => {
     services.mongodb = 'down';
   }
 
-  // Check Redis
   try {
     const redisClient = getRedisClient();
     if (redisClient && redisClient.isOpen) {
@@ -43,7 +42,6 @@ exports.healthCheckDetails = async (req, res) => {
     services.redis = 'down';
   }
 
-  // Determine overall status
   const allUp = Object.values(services).every(status => status === 'up');
   const overallStatus = allUp ? 'ok' : 'degraded';
 

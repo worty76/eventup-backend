@@ -61,17 +61,14 @@ const btcProfileSchema = new mongoose.Schema(
   },
 );
 
-// Index for better query performance
 
 btcProfileSchema.index({ verified: 1 });
 btcProfileSchema.index({ "rating.average": -1 });
 
-// Method to update rating
 btcProfileSchema.methods.updateRating = function (newRating) {
   const currentAverage = this.rating.average;
   const totalReviews = this.rating.totalReviews;
 
-  // Calculate new average
   const newAverage =
     (currentAverage * totalReviews + newRating) / (totalReviews + 1);
 

@@ -81,7 +81,6 @@ const eventSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Validate that endTime is after startTime
 eventSchema.pre('save', function(next) {
   if (this.endTime <= this.startTime) {
     next(new Error('End time must be after start time'));
@@ -92,7 +91,6 @@ eventSchema.pre('save', function(next) {
   next();
 });
 
-// Indexes for better query performance
 eventSchema.index({ btcId: 1 });
 eventSchema.index({ status: 1, deadline: -1 });
 eventSchema.index({ location: 1 });
@@ -100,14 +98,12 @@ eventSchema.index({ eventType: 1 });
 eventSchema.index({ urgent: 1, createdAt: -1 });
 eventSchema.index({ title: 'text', description: 'text' });
 
-// Method to check if event can receive applications
 eventSchema.methods.canApply = function() {
   return this.status === 'RECRUITING' && 
          new Date() < this.deadline && 
          this.appliedCount < this.quantity;
 };
 
-// Method to increment views
 eventSchema.methods.incrementViews = function() {
   this.views += 1;
   return this.save();

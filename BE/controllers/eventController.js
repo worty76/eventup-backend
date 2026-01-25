@@ -9,7 +9,7 @@ exports.getEvents = async (req, res, next) => {
       keyword,
       location,
       salary,
-      salaryRange, // 'low' (<500K), 'medium' (500K-1M), 'high' (>1M)
+      salaryRange, 
       type,
       timeFrom,
       timeTo,
@@ -18,7 +18,6 @@ exports.getEvents = async (req, res, next) => {
       limit = 10,
     } = req.query;
 
-    // Build query
     const query = { status: "RECRUITING" };
 
     if (keyword) {
@@ -46,24 +45,18 @@ exports.getEvents = async (req, res, next) => {
       if (timeTo) query.startTime.$lte = new Date(timeTo);
     }
 
-    // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Helper function to parse salary string to number (in VND)
-    // Vietnamese format uses dots as thousand separators: "500.000 VNĐ/ngày" = 500,000 VND
     const parseSalary = (salaryStr) => {
       if (!salaryStr) return 0;
-      // Remove all non-digit characters to extract the number
       const numbers = salaryStr.replace(/[^0-9]/g, "");
       return parseInt(numbers) || 0;
     };
 
-    // Execute query
     let events = await Event.find(query)
       .populate("btcId", "email")
       .sort({ urgent: -1, createdAt: -1 });
 
-    // Apply salary range filter in-memory (since salary is stored as string)
     if (salaryRange) {
       events = events.filter((event) => {
         const salaryValue = parseSalary(event.salary);
@@ -78,7 +71,6 @@ exports.getEvents = async (req, res, next) => {
       });
     }
 
-    // Apply pagination after filtering
     const total = events.length;
     const paginatedEvents = events.slice(skip, skip + parseInt(limit));
 
@@ -113,10 +105,8 @@ exports.getEvent = async (req, res, next) => {
       });
     }
 
-    // Increment views
     await event.incrementViews();
 
-    // Calculate successful events count (events with COMPLETED status)
     const completedEventsCount = await Event.countDocuments({
       btcId: event.btcId._id,
       status: "COMPLETED",
@@ -152,7 +142,6 @@ exports.createEvent = async (req, res, next) => {
   try {
     const user = req.user;
 
-    // Check post limit
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const postsThisMonth = await Event.countDocuments({
@@ -160,7 +149,6 @@ exports.createEvent = async (req, res, next) => {
       createdAt: { $gte: startOfMonth },
     });
 
-    // Default limits if not in env
     const FREE_POST_LIMIT = parseInt(process.env.FREE_POST_LIMIT || "3");
     const PREMIUM_POST_LIMIT = parseInt(process.env.PREMIUM_POST_LIMIT || "15");
     const PREMIUM_URGENT_LIMIT = 3;
@@ -178,7 +166,6 @@ exports.createEvent = async (req, res, next) => {
       });
     }
 
-    // Check urgent feature (Premium only)
     if (req.body.urgent) {
       if (!user.isPremiumActive()) {
         return res.status(403).json({
@@ -187,7 +174,6 @@ exports.createEvent = async (req, res, next) => {
         });
       }
 
-      // Check urgent limit
       const urgentPostsThisMonth = await Event.countDocuments({
         btcId: user._id,
         urgent: true,
@@ -202,7 +188,6 @@ exports.createEvent = async (req, res, next) => {
       }
     }
 
-    // Validate dates
     const { startTime, endTime, deadline } = req.body;
     if (startTime && endTime && new Date(startTime) >= new Date(endTime)) {
       return res.status(400).json({
@@ -218,7 +203,6 @@ exports.createEvent = async (req, res, next) => {
       });
     }
 
-    // Create event
     const event = await Event.create({
       ...req.body,
       btcId: user._id,
@@ -248,7 +232,6 @@ exports.updateEvent = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (event.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -284,7 +267,6 @@ exports.deleteEvent = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (event.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -292,7 +274,6 @@ exports.deleteEvent = async (req, res, next) => {
       });
     }
 
-    // Check if there are applications
     const applicationCount = await Application.countDocuments({
       eventId: event._id,
     });
@@ -355,24 +336,20 @@ exports.getDashboardStats = async (req, res, next) => {
   try {
     const btcId = req.user._id;
 
-    // 1. Active Events (Status 'RECRUITING')
     const activeEventsCount = await Event.countDocuments({
       btcId,
       status: "RECRUITING",
     });
 
-    // 2. Total Views
     const events = await Event.find({ btcId }).select("views");
     const totalViews = events.reduce((acc, curr) => acc + (curr.views || 0), 0);
 
-    // 3. New Applications (Pending)
     const eventIds = events.map((e) => e._id);
     const pendingApplications = await Application.countDocuments({
       eventId: { $in: eventIds },
       status: "PENDING",
     });
 
-    // 4. Chart Data (Last 7 days applications)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -393,7 +370,6 @@ exports.getDashboardStats = async (req, res, next) => {
       { $sort: { _id: 1 } },
     ]);
 
-    // Fill missing days
     const chartData = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -401,11 +377,10 @@ exports.getDashboardStats = async (req, res, next) => {
       const dateString = d.toISOString().split("T")[0];
       const found = applications.find((a) => a._id === dateString);
 
-      // Format date as DD/MM for display
       const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
 
       chartData.push({
-        name: displayDate, // DD/MM
+        name: displayDate,
         fullDate: dateString,
         value: found ? found.count : 0,
       });

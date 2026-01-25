@@ -85,14 +85,27 @@ router.get("/ctv/cv", protect, isCTV, getCTVCV);
  *             properties:
  *               fullName:
  *                 type: string
+ *                 description: Họ và tên
+ *               avatar:
+ *                 type: string
+ *                 description: URL ảnh đại diện
+ *               gender:
+ *                 type: string
+ *                 enum: [MALE, FEMALE, OTHER]
+ *                 description: Giới tính
+ *               address:
+ *                 type: string
+ *                 description: Địa chỉ
  *               skills:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: Danh sách kỹ năng
  *               experiences:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: Kinh nghiệm làm việc
  *     responses:
  *       200:
  *         description: Cập nhật thành công
@@ -130,10 +143,22 @@ router.get("/btc/profile", protect, isBTC, getBTCProfile);
  *             properties:
  *               agencyName:
  *                 type: string
+ *                 description: Tên công ty/tổ chức
+ *               logo:
+ *                 type: string
+ *                 description: URL logo công ty
+ *               address:
+ *                 type: string
+ *                 description: Địa chỉ công ty
  *               website:
  *                 type: string
+ *                 description: Website công ty
  *               fanpage:
  *                 type: string
+ *                 description: Facebook fanpage
+ *               description:
+ *                 type: string
+ *                 description: Mô tả về công ty
  *     responses:
  *       200:
  *         description: Cập nhật thành công

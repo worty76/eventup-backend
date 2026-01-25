@@ -331,7 +331,7 @@ exports.cancelSubscription = async (req, res, next) => {
     }
 
 
-    user.subscription.autoRenew = false; // If you have this field
+    user.subscription.autoRenew = false; 
 
     await user.save();
 

@@ -41,7 +41,7 @@ const paymentSchema = new mongoose.Schema(
         enum: ["PREMIUM"],
       },
       duration: {
-        type: Number, // in days
+        type: Number, 
       },
     },
   },
@@ -50,7 +50,6 @@ const paymentSchema = new mongoose.Schema(
   },
 );
 
-// Indexes
 paymentSchema.index({ userId: 1, status: 1 });
 
 paymentSchema.index({ status: 1, createdAt: -1 });

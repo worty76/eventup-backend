@@ -39,12 +39,10 @@ exports.updateMe = async (req, res, next) => {
   try {
     const { phone, ...profileData } = req.body;
 
-    // Update user basic info
     if (phone) {
       await User.findByIdAndUpdate(req.user._id, { phone });
     }
 
-    // Update profile based on role
     let profile;
     if (req.user.role === "CTV") {
       profile = await CTVProfile.findOneAndUpdate(
@@ -197,7 +195,6 @@ exports.getPublicBTCProfile = async (req, res, next) => {
       });
     }
 
-    // Get reviews for this BTC (CTV_TO_BTC reviews)
     const reviews = await Review.find({
       toUser: profile.userId._id || profile.userId,
       reviewType: "CTV_TO_BTC",
@@ -207,7 +204,6 @@ exports.getPublicBTCProfile = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(20);
 
-    // Get all events by this BTC
     const allEvents = await Event.find({
       btcId: profile.userId._id || profile.userId,
     })
@@ -216,7 +212,6 @@ exports.getPublicBTCProfile = async (req, res, next) => {
       )
       .sort({ createdAt: -1 });
 
-    // Separate events by status
     const now = new Date();
     const pastEvents = allEvents.filter(
       (e) => new Date(e.endTime) < now || e.status === "COMPLETED",
@@ -270,7 +265,6 @@ exports.getPublicCTVProfile = async (req, res, next) => {
       });
     }
 
-    // Get reviews for this CTV (BTC_TO_CTV reviews)
     const reviews = await Review.find({
       toUser: profile.userId._id || profile.userId,
       reviewType: "BTC_TO_CTV",
@@ -280,7 +274,6 @@ exports.getPublicCTVProfile = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(20);
 
-    // Categorize joined events
     const now = new Date();
     const joinedEvents = profile.joinedEvents || [];
 

@@ -16,7 +16,6 @@ exports.applyToEvent = async (req, res, next) => {
     const { coverLetter } = req.body;
     const ctvId = req.user._id;
 
-    // Check if event exists
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({
@@ -25,7 +24,6 @@ exports.applyToEvent = async (req, res, next) => {
       });
     }
 
-    // Check if event can receive applications
     if (!event.canApply()) {
       return res.status(400).json({
         success: false,
@@ -33,7 +31,6 @@ exports.applyToEvent = async (req, res, next) => {
       });
     }
 
-    // Check if already applied
     const existingApplication = await Application.findOne({ eventId, ctvId });
     if (existingApplication) {
       return res.status(400).json({
@@ -42,7 +39,6 @@ exports.applyToEvent = async (req, res, next) => {
       });
     }
 
-    // Create application
     const application = await Application.create({
       eventId,
       ctvId,
@@ -50,11 +46,9 @@ exports.applyToEvent = async (req, res, next) => {
       status: "PENDING",
     });
 
-    // Update event applied count
     event.appliedCount += 1;
     await event.save();
 
-    // Create notification for BTC
     await Notification.create({
       userId: event.btcId,
       type: "APPLICATION",
@@ -123,7 +117,6 @@ exports.getEventApplications = async (req, res, next) => {
     const { eventId } = req.params;
     const { status, page = 1, limit = 10 } = req.query;
 
-    // Check if event exists and belongs to BTC
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({
@@ -176,7 +169,7 @@ exports.getEventApplications = async (req, res, next) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: applicationsWithProfile, // ✅ Đổi từ applications → applicationsWithProfile
+      data: applicationsWithProfile, 
     });
   } catch (error) {
     next(error);
@@ -199,7 +192,6 @@ exports.approveApplication = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (application.eventId.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -213,7 +205,6 @@ exports.approveApplication = async (req, res, next) => {
     }
     await application.save();
 
-    // Create notification for CTV
     await Notification.create({
       userId: application.ctvId,
       type: "APPROVAL",
@@ -248,7 +239,6 @@ exports.rejectApplication = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (application.eventId.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -262,7 +252,6 @@ exports.rejectApplication = async (req, res, next) => {
     }
     await application.save();
 
-    // Create notification for CTV
     await Notification.create({
       userId: application.ctvId,
       type: "REJECTION",
