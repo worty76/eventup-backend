@@ -1,54 +1,30 @@
-const nodemailer = require("nodemailer");
+const Brevo = require("@getbrevo/brevo");
 
-// Create transporter for Brevo SMTP
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-    tls: {
-      ciphers: 'SSLv3',
-    },
-  });
-};
+// Initialize Brevo API with API key
+const apiInstance = new Brevo.TransactionalEmailsApi();
+apiInstance.setApiKey(
+  Brevo.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
 
-// Send email
 const sendEmail = async (options) => {
   try {
-    // console.log("--- EMAIL DEBUG ---");
-    // console.log("To:", options.to);
-    // console.log("Subject:", options.subject);
-    // console.log("Text:", options.text);
-    // console.log("-------------------");
-    // đoạn này để test email trong dev môi trường không có email config
-    // if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    //   console.log('⚠️  Email credentials not configured. Email simulation:');
-    //   console.log('   To:', options.to);
-    //   console.log('   Subject:', options.subject);
-    //   console.log('   Content:', options.text);
-    //   console.log('   [DEV MODE] Email would be sent in production');
-    //   return { messageId: 'dev-mode-no-email', simulated: true };
-    // }
+    const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to: options.to,
-      subject: options.subject,
-      text: options.text,
-      html: options.html,
+    sendSmtpEmail.subject = options.subject;
+    sendSmtpEmail.to = [{ email: options.to }];
+    sendSmtpEmail.sender = {
+      name: process.env.EMAIL_FROM_NAME || "Job Event Up",
+      email: process.env.EMAIL_FROM_ADDRESS || "jobeventweb@gmail.com",
     };
+    sendSmtpEmail.htmlContent = options.html || options.text;
+    sendSmtpEmail.textContent = options.text;
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent:", info.messageId);
-    return info;
+    const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log("Email sent via Brevo:", data.messageId);
+    return data;
   } catch (error) {
-    console.error("Email send error:", error);
+    console.error("Brevo email send error:", error);
     throw error;
   }
 };
