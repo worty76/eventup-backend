@@ -1,10 +1,10 @@
-const cloudinary = require('cloudinary').v2;
+const cloudinary = require("cloudinary").v2;
 
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 // @desc    Upload file
@@ -15,27 +15,24 @@ exports.uploadFile = async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'Please upload a file'
+        message: "Please upload a file",
       });
     }
 
-    const { type = 'general' } = req.body; // avatar, logo, poster, general
+    const { type = "general" } = req.body; // avatar, logo, poster, general
 
     // Upload to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: `job-event/${type}`,
-          resource_type: 'auto',
-          transformation: [
-            { width: 1000, crop: 'limit' },
-            { quality: 'auto' }
-          ]
+          resource_type: "auto",
+          transformation: [{ quality: "auto:best", fetch_format: "auto" }],
         },
         (error, result) => {
           if (error) reject(error);
           else resolve(result);
-        }
+        },
       );
 
       uploadStream.end(req.file.buffer);
@@ -49,8 +46,8 @@ exports.uploadFile = async (req, res, next) => {
         format: result.format,
         width: result.width,
         height: result.height,
-        size: result.bytes
-      }
+        size: result.bytes,
+      },
     });
   } catch (error) {
     next(error);
@@ -68,7 +65,7 @@ exports.deleteFile = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'File deleted successfully'
+      message: "File deleted successfully",
     });
   } catch (error) {
     next(error);
@@ -83,26 +80,28 @@ exports.uploadMultipleFiles = async (req, res, next) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Please upload files'
+        message: "Please upload files",
       });
     }
 
-    const { type = 'general' } = req.body;
+    const { type = "general" } = req.body;
 
-    const uploadPromises = req.files.map(file => {
+    const uploadPromises = req.files.map((file) => {
       return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             folder: `job-event/${type}`,
-            resource_type: 'auto'
+            resource_type: "auto",
+            transformation: [{ quality: "auto:best", fetch_format: "auto" }],
           },
           (error, result) => {
             if (error) reject(error);
-            else resolve({
-              url: result.secure_url,
-              publicId: result.public_id
-            });
-          }
+            else
+              resolve({
+                url: result.secure_url,
+                publicId: result.public_id,
+              });
+          },
         );
 
         uploadStream.end(file.buffer);
@@ -114,7 +113,7 @@ exports.uploadMultipleFiles = async (req, res, next) => {
     res.status(200).json({
       success: true,
       count: results.length,
-      data: results
+      data: results,
     });
   } catch (error) {
     next(error);

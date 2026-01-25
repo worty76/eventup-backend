@@ -127,6 +127,15 @@ exports.getEvent = async (req, res, next) => {
       eventObj.btcId.btcProfile.successfulEventsCount = completedEventsCount;
     }
 
+    // Check if user has applied (if authenticated)
+    if (req.user) {
+      const application = await Application.findOne({
+        eventId: event._id,
+        ctvId: req.user._id,
+      });
+      eventObj.isApplied = !!application;
+    }
+
     res.status(200).json({
       success: true,
       data: eventObj,
