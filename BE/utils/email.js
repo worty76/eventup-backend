@@ -4,14 +4,14 @@ const nodemailer = require("nodemailer");
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT),
+    port: parseInt(process.env.EMAIL_PORT) || 465,
     secure: true, 
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,
     },
     tls: {
-      rejectUnauthorized: process.env.NODE_ENV === 'production',
+      rejectUnauthorized: false,
     },
   });
 };
@@ -19,11 +19,11 @@ const createTransporter = () => {
 // Send email
 const sendEmail = async (options) => {
   try {
-    console.log("--- EMAIL DEBUG ---");
-    console.log("To:", options.to);
-    console.log("Subject:", options.subject);
-    console.log("Text:", options.text);
-    console.log("-------------------");
+    // console.log("--- EMAIL DEBUG ---");
+    // console.log("To:", options.to);
+    // console.log("Subject:", options.subject);
+    // console.log("Text:", options.text);
+    // console.log("-------------------");
     // đoạn này để test email trong dev môi trường không có email config
     // if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     //   console.log('⚠️  Email credentials not configured. Email simulation:');
