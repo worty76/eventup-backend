@@ -55,17 +55,14 @@ const notificationSchema = new mongoose.Schema(
   },
 );
 
-// Indexes for better query performance
 notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, type: 1 });
 
-// Method to mark as read
 notificationSchema.methods.markAsRead = function () {
   this.isRead = true;
   return this.save();
 };
 
-// Static method to create notification
 notificationSchema.statics.createNotification = async function (data) {
   return await this.create(data);
 };

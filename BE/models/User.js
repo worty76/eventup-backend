@@ -79,7 +79,6 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-// Virtual for BTC Profile
 userSchema.virtual("btcProfile", {
   ref: "BTCProfile",
   localField: "_id",
@@ -87,7 +86,6 @@ userSchema.virtual("btcProfile", {
   justOne: true,
 });
 
-// Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("passwordHash") || !this.passwordHash) {
     return next();
@@ -102,7 +100,6 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   const user = await mongoose
     .model("User")
@@ -112,20 +109,17 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, user.passwordHash);
 };
 
-// Check if subscription is active
 userSchema.methods.isPremiumActive = function () {
   if (this.subscription.plan !== "PREMIUM") return false;
   if (!this.subscription.expiredAt) return false;
   return new Date() < this.subscription.expiredAt;
 };
 
-// Reset monthly limits (called by cron)
 userSchema.methods.resetMonthlyLimits = function () {
   this.subscription.urgentUsed = 0;
   this.subscription.postUsed = 0;
 };
 
-// Index for faster queries
 
 userSchema.index({ role: 1, status: 1 });
 

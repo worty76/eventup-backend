@@ -460,7 +460,6 @@ exports.momoNotify = async (req, res, next) => {
       };
       await payment.save();
 
-      // Handle subscription activation if needed
       if (payment.subscriptionData && payment.subscriptionData.plan) {
         const user = await User.findById(payment.userId);
 
@@ -479,7 +478,6 @@ exports.momoNotify = async (req, res, next) => {
         }
       }
     } else {
-      // Payment failed
       payment.status = "FAILED";
       payment.metadata = {
         ...payment.metadata,
@@ -489,7 +487,6 @@ exports.momoNotify = async (req, res, next) => {
       await payment.save();
     }
 
-    // Respond to MoMo
     res.status(200).json({
       success: true,
       message: "Notification received",

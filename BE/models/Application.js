@@ -48,15 +48,12 @@ const applicationSchema = new mongoose.Schema(
   },
 );
 
-// Compound index to ensure one application per user per event
 applicationSchema.index({ eventId: 1, ctvId: 1 }, { unique: true });
 
-// Indexes for queries
 applicationSchema.index({ eventId: 1, status: 1 });
 applicationSchema.index({ ctvId: 1, status: 1 });
 applicationSchema.index({ status: 1, createdAt: -1 });
 
-// Prevent duplicate application
 applicationSchema.pre("save", async function (next) {
   if (this.isNew) {
     const existingApp = await mongoose.model("Application").findOne({

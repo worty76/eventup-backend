@@ -81,28 +81,23 @@ const ctvProfileSchema = new mongoose.Schema(
   },
 );
 
-// Index for better query performance
 
 ctvProfileSchema.index({ "reputation.score": -1 });
 ctvProfileSchema.index({ trustScore: -1 });
 
-// Method to update rating (reputation score)
 ctvProfileSchema.methods.updateReputation = function (ratingValue) {
   const currentScore = this.reputation.score;
   const totalReviews = this.reputation.totalReviews;
 
-  // Calculate new average
   const newScore =
     (currentScore * totalReviews + ratingValue) / (totalReviews + 1);
 
-  this.reputation.score = Math.max(0, Math.min(5, newScore)); // Fix max to 5 for rating
+  this.reputation.score = Math.max(0, Math.min(5, newScore)); 
   this.reputation.totalReviews += 1;
 };
 
-// Method to update trust score
 ctvProfileSchema.methods.updateTrustScore = function (delta) {
   let newScore = this.trustScore + delta;
-  // Ensure within bounds 0-10
   if (newScore > 10) newScore = 10;
   if (newScore < 0) newScore = 0;
   this.trustScore = newScore;

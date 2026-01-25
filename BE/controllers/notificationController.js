@@ -58,7 +58,6 @@ exports.markAsRead = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (notification.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -110,7 +109,6 @@ exports.deleteNotification = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (notification.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,

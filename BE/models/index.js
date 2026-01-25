@@ -1,4 +1,3 @@
-// Export all models from a single file
 module.exports = {
   User: require('./User'),
   CTVProfile: require('./CTVProfile'),
