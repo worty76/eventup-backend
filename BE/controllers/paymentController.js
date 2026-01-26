@@ -3,17 +3,22 @@ const https = require("https");
 const querystring = require("querystring");
 const { Payment, User } = require("../models");
 
-// Helper function to sort object keys
 const sortObject = (obj) => {
-  const sorted = {};
-  const keys = Object.keys(obj).sort();
-  keys.forEach((key) => {
-    sorted[key] = obj[key];
-  });
+  let sorted = {};
+  let str = [];
+  let key;
+  for (key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      str.push(encodeURIComponent(key));
+    }
+  }
+  str.sort();
+  for (key = 0; key < str.length; key++) {
+    sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, "+");
+  }
   return sorted;
 };
 
-// Helper function to format date for VNPay
 const formatDate = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -24,7 +29,6 @@ const formatDate = (date) => {
   return `${year}${month}${day}${hours}${minutes}${seconds}`;
 };
 
-// Helper function to create MoMo payment
 const createMoMoPayment = async (payment) => {
   const accessKey = process.env.MOMO_ACCESS_KEY;
   const secretKey = process.env.MOMO_SECRET_KEY;
@@ -110,7 +114,6 @@ const createMoMoPayment = async (payment) => {
   });
 };
 
-// Helper function to create VNPay payment
 const createVNPayPayment = async (payment, ipAddr = "127.0.0.1") => {
   const vnp_TmnCode = process.env.VNPAY_TMN_CODE;
   const vnp_HashSecret = process.env.VNPAY_HASH_SECRET;
@@ -120,30 +123,35 @@ const createVNPayPayment = async (payment, ipAddr = "127.0.0.1") => {
   const createDate = formatDate(new Date());
   const orderId = payment.transactionId;
 
-  const vnp_Params = {
-    vnp_Version: "2.1.0",
-    vnp_Command: "pay",
-    vnp_TmnCode,
-    vnp_Amount: (payment.amount * 100).toString(),
-    vnp_CreateDate: createDate,
-    vnp_CurrCode: "VND",
-    vnp_IpAddr: ipAddr,
-    vnp_Locale: "vn",
-    vnp_OrderInfo: payment.description || "Payment for subscription",
-    vnp_OrderType: "other",
-    vnp_ReturnUrl,
-    vnp_TxnRef: orderId,
-  };
+  const expireDate = new Date();
+  expireDate.setMinutes(expireDate.getMinutes() + 10);
+  const vnp_ExpireDate = formatDate(expireDate);
 
-  const sortedParams = sortObject(vnp_Params);
-  const signData = querystring.stringify(sortedParams, { encode: false });
+  let vnp_Params = {};
+  vnp_Params["vnp_Version"] = "2.1.0";
+  vnp_Params["vnp_Command"] = "pay";
+  vnp_Params["vnp_TmnCode"] = vnp_TmnCode;
+  vnp_Params["vnp_Locale"] = "vn";
+  vnp_Params["vnp_CurrCode"] = "VND";
+  vnp_Params["vnp_TxnRef"] = orderId;
+  vnp_Params["vnp_OrderInfo"] =
+    payment.description || "Thanh toan cho ma GD:" + orderId;
+  vnp_Params["vnp_OrderType"] = "other";
+  vnp_Params["vnp_Amount"] = payment.amount * 100;
+  vnp_Params["vnp_ReturnUrl"] = vnp_ReturnUrl;
+  vnp_Params["vnp_IpAddr"] = ipAddr;
+  vnp_Params["vnp_CreateDate"] = createDate;
+  vnp_Params["vnp_ExpireDate"] = vnp_ExpireDate;
+
+  vnp_Params = sortObject(vnp_Params);
+
+  const qs = require("qs");
+  const signData = qs.stringify(vnp_Params, { encode: false });
   const hmac = crypto.createHmac("sha512", vnp_HashSecret);
   const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
+  vnp_Params["vnp_SecureHash"] = signed;
 
-  vnp_Params.vnp_SecureHash = signed;
-
-  const paymentUrl =
-    vnp_Url + "?" + querystring.stringify(vnp_Params, { encode: false });
+  const paymentUrl = vnp_Url + "?" + qs.stringify(vnp_Params, { encode: false });
 
   return { paymentUrl };
 };
@@ -210,7 +218,7 @@ exports.getPaymentByTransactionId = async (req, res, next) => {
   }
 };
 
-// @desc    VNPay return URL handler
+// @desc    VNPay return URL handler (VNPAY standard)
 // @route   GET /api/payments/vnpay/return
 // @access  Public
 exports.vnpayReturn = async (req, res, next) => {
@@ -218,32 +226,33 @@ exports.vnpayReturn = async (req, res, next) => {
     let vnp_Params = req.query;
     const secureHash = vnp_Params["vnp_SecureHash"];
 
-    const orderId = vnp_Params["vnp_TxnRef"];
-    const rspCode = vnp_Params["vnp_ResponseCode"];
-
     delete vnp_Params["vnp_SecureHash"];
     delete vnp_Params["vnp_SecureHashType"];
 
     vnp_Params = sortObject(vnp_Params);
+
     const vnp_HashSecret = process.env.VNPAY_HASH_SECRET;
-    const signData = querystring.stringify(vnp_Params, { encode: false });
+    const qs = require("qs");
+    const signData = qs.stringify(vnp_Params, { encode: false });
     const hmac = crypto.createHmac("sha512", vnp_HashSecret);
     const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
 
     const frontendUrl = process.env.CORS_ORIGIN || "http://localhost:3000";
 
     if (secureHash === signed) {
+      const orderId = req.query["vnp_TxnRef"];
+      const rspCode = req.query["vnp_ResponseCode"];
+
       const payment = await Payment.findOne({ transactionId: orderId });
 
       if (payment) {
         if (rspCode === "00") {
-          // Payment successful
           payment.status = "SUCCESS";
           payment.metadata = {
             ...payment.metadata,
-            vnpayTransactionNo: vnp_Params["vnp_TransactionNo"],
-            vnpayBankCode: vnp_Params["vnp_BankCode"],
-            vnpayCardType: vnp_Params["vnp_CardType"],
+            vnpayTransactionNo: req.query["vnp_TransactionNo"],
+            vnpayBankCode: req.query["vnp_BankCode"],
+            vnpayCardType: req.query["vnp_CardType"],
           };
           await payment.save();
 
@@ -269,7 +278,6 @@ exports.vnpayReturn = async (req, res, next) => {
             `${frontendUrl}/payment-success?orderId=${orderId}`,
           );
         } else {
-          // Payment failed
           payment.status = "FAILED";
           payment.metadata = {
             ...payment.metadata,
@@ -296,6 +304,101 @@ exports.vnpayReturn = async (req, res, next) => {
   }
 };
 
+// @desc    VNPay IPN callback (VNPAY standard)
+// @route   GET /api/payments/vnpay/notify
+// @access  Public
+exports.vnpayNotify = async (req, res, next) => {
+  try {
+    let vnp_Params = req.query;
+    const secureHash = vnp_Params["vnp_SecureHash"];
+
+    const orderId = vnp_Params["vnp_TxnRef"];
+    const rspCode = vnp_Params["vnp_ResponseCode"];
+
+    delete vnp_Params["vnp_SecureHash"];
+    delete vnp_Params["vnp_SecureHashType"];
+
+    vnp_Params = sortObject(vnp_Params);
+    const vnp_HashSecret = process.env.VNPAY_HASH_SECRET;
+    const qs = require("qs");
+    const signData = qs.stringify(vnp_Params, { encode: false });
+    const hmac = crypto.createHmac("sha512", vnp_HashSecret);
+    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
+
+    if (secureHash === signed) {
+      const payment = await Payment.findOne({ transactionId: orderId });
+
+      if (!payment) {
+        console.error("VNPay IPN: Order not found:", orderId);
+        return res.status(200).json({ RspCode: "01", Message: "Order not found" });
+      }
+
+      const checkAmount = true; 
+
+      if (checkAmount) {
+        if (payment.status === "PENDING") {
+          if (rspCode === "00") {
+            payment.status = "SUCCESS";
+            payment.metadata = {
+              ...payment.metadata,
+              vnpayTransactionNo: req.query["vnp_TransactionNo"],
+              vnpayBankCode: req.query["vnp_BankCode"],
+              vnpayCardType: req.query["vnp_CardType"],
+            };
+            await payment.save();
+
+            if (payment.subscriptionData && payment.subscriptionData.plan) {
+              const user = await User.findById(payment.userId);
+
+              if (user) {
+                const expiryDate = new Date();
+                expiryDate.setDate(
+                  expiryDate.getDate() + payment.subscriptionData.duration,
+                );
+
+                user.subscription.plan = payment.subscriptionData.plan;
+                user.subscription.expiredAt = expiryDate;
+                user.subscription.urgentUsed = 0;
+                user.subscription.postUsed = 0;
+
+                await user.save();
+              }
+            }
+
+            return res.status(200).json({ RspCode: "00", Message: "Success" });
+          } else {
+            payment.status = "FAILED";
+            payment.metadata = {
+              ...payment.metadata,
+              vnpayResponseCode: rspCode,
+            };
+            await payment.save();
+
+            return res.status(200).json({ RspCode: "00", Message: "Success" });
+          }
+        } else {
+          return res.status(200).json({
+            RspCode: "02",
+            Message: "This order has been updated to the payment status",
+          });
+        }
+      } else {
+        return res
+          .status(200)
+          .json({ RspCode: "04", Message: "Amount invalid" });
+      }
+    } else {
+      console.error("VNPay IPN: Checksum failed");
+      return res
+        .status(200)
+        .json({ RspCode: "97", Message: "Checksum failed" });
+    }
+  } catch (error) {
+    console.error("VNPay IPN Error:", error);
+    return res.status(200).json({ RspCode: "99", Message: "Unknown error" });
+  }
+};
+
 // @desc    MoMo return URL handler
 // @route   GET /api/payments/momo/return
 // @access  Public
@@ -319,7 +422,6 @@ exports.momoReturn = async (req, res, next) => {
 
     const frontendUrl = process.env.CORS_ORIGIN || "http://localhost:3000";
 
-    // Verify signature
     const secretKey = process.env.MOMO_SECRET_KEY;
     const accessKey = process.env.MOMO_ACCESS_KEY;
 
@@ -337,7 +439,6 @@ exports.momoReturn = async (req, res, next) => {
       );
     }
 
-    // Find and update payment
     const payment = await Payment.findOne({ transactionId: orderId });
 
     if (!payment) {
@@ -346,7 +447,6 @@ exports.momoReturn = async (req, res, next) => {
     }
 
     if (resultCode === "0") {
-      // Payment successful
       payment.status = "SUCCESS";
       payment.metadata = {
         ...payment.metadata,
@@ -356,7 +456,6 @@ exports.momoReturn = async (req, res, next) => {
       };
       await payment.save();
 
-      // Activate subscription if needed
       if (payment.subscriptionData && payment.subscriptionData.plan) {
         const user = await User.findById(payment.userId);
 
@@ -374,12 +473,10 @@ exports.momoReturn = async (req, res, next) => {
           await user.save();
         }
       }
-      // thay bằng url của FE màn hình thanh toán thành công
       return res.redirect(
         `${frontendUrl}/payment-success?orderId=${orderId}&transId=${transId}`,
       );
     } else {
-      // Payment failed
       payment.status = "FAILED";
       payment.metadata = {
         ...payment.metadata,
@@ -396,6 +493,101 @@ exports.momoReturn = async (req, res, next) => {
     console.error("MoMo Return Error:", error);
     const frontendUrl = process.env.CORS_ORIGIN || "http://localhost:3000";
     res.redirect(`${frontendUrl}/payment-error?reason=server_error`);
+  }
+};
+
+// @desc    VNPay IPN callback (VNPAY standard)
+// @route   GET /api/payments/vnpay/notify
+// @access  Public
+exports.vnpayNotify = async (req, res, next) => {
+  try {
+    let vnp_Params = req.query;
+    const secureHash = vnp_Params["vnp_SecureHash"];
+
+    const orderId = vnp_Params["vnp_TxnRef"];
+    const rspCode = vnp_Params["vnp_ResponseCode"];
+
+    delete vnp_Params["vnp_SecureHash"];
+    delete vnp_Params["vnp_SecureHashType"];
+
+    vnp_Params = sortObject(vnp_Params);
+    const vnp_HashSecret = process.env.VNPAY_HASH_SECRET;
+    const qs = require("qs");
+    const signData = qs.stringify(vnp_Params, { encode: false });
+    const hmac = crypto.createHmac("sha512", vnp_HashSecret);
+    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
+
+    if (secureHash === signed) {
+      const payment = await Payment.findOne({ transactionId: orderId });
+
+      if (!payment) {
+        console.error("VNPay IPN: Order not found:", orderId);
+        return res.status(200).json({ RspCode: "01", Message: "Order not found" });
+      }
+
+      const checkAmount = true; 
+
+      if (checkAmount) {
+        if (payment.status === "PENDING") {
+          if (rspCode === "00") {
+            payment.status = "SUCCESS";
+            payment.metadata = {
+              ...payment.metadata,
+              vnpayTransactionNo: req.query["vnp_TransactionNo"],
+              vnpayBankCode: req.query["vnp_BankCode"],
+              vnpayCardType: req.query["vnp_CardType"],
+            };
+            await payment.save();
+
+            if (payment.subscriptionData && payment.subscriptionData.plan) {
+              const user = await User.findById(payment.userId);
+
+              if (user) {
+                const expiryDate = new Date();
+                expiryDate.setDate(
+                  expiryDate.getDate() + payment.subscriptionData.duration,
+                );
+
+                user.subscription.plan = payment.subscriptionData.plan;
+                user.subscription.expiredAt = expiryDate;
+                user.subscription.urgentUsed = 0;
+                user.subscription.postUsed = 0;
+
+                await user.save();
+              }
+            }
+
+            return res.status(200).json({ RspCode: "00", Message: "Success" });
+          } else {
+            payment.status = "FAILED";
+            payment.metadata = {
+              ...payment.metadata,
+              vnpayResponseCode: rspCode,
+            };
+            await payment.save();
+
+            return res.status(200).json({ RspCode: "00", Message: "Success" });
+          }
+        } else {
+          return res.status(200).json({
+            RspCode: "02",
+            Message: "This order has been updated to the payment status",
+          });
+        }
+      } else {
+        return res
+          .status(200)
+          .json({ RspCode: "04", Message: "Amount invalid" });
+      }
+    } else {
+      console.error("VNPay IPN: Checksum failed");
+      return res
+        .status(200)
+        .json({ RspCode: "97", Message: "Checksum failed" });
+    }
+  } catch (error) {
+    console.error("VNPay IPN Error:", error);
+    return res.status(200).json({ RspCode: "99", Message: "Unknown error" });
   }
 };
 
@@ -420,7 +612,6 @@ exports.momoNotify = async (req, res, next) => {
       signature,
     } = req.body;
 
-    // Verify signature
     const secretKey = process.env.MOMO_SECRET_KEY;
     const rawSignature = `accessKey=${process.env.MOMO_ACCESS_KEY}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
 
@@ -437,7 +628,6 @@ exports.momoNotify = async (req, res, next) => {
       });
     }
 
-    // Find payment by transaction ID (orderId)
     const payment = await Payment.findOne({ transactionId: orderId });
 
     if (!payment) {
@@ -448,9 +638,7 @@ exports.momoNotify = async (req, res, next) => {
       });
     }
 
-    // Update payment status based on MoMo result
     if (resultCode === 0) {
-      // Payment successful
       payment.status = "SUCCESS";
       payment.metadata = {
         ...payment.metadata,
