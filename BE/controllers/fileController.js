@@ -45,10 +45,24 @@ exports.uploadFile = async (req, res, next) => {
       uploadStream.end(req.file.buffer);
     });
 
+    const transformedUrl = cloudinary.url(result.public_id, {
+      secure: true,
+      transformation: [
+        {
+          width: 1920,
+          height: 1080,
+          crop: 'limit',
+          quality: 'auto:best',
+          fetch_format: 'auto'
+        }
+      ]
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        url: result.secure_url,
+        url: transformedUrl,
+        originalUrl: result.secure_url,
         publicId: result.public_id,
         format: result.format,
         width: result.width,
@@ -111,11 +125,26 @@ exports.uploadMultipleFiles = async (req, res, next) => {
           },
           (error, result) => {
             if (error) reject(error);
-            else
+            else {
+              const transformedUrl = cloudinary.url(result.public_id, {
+                secure: true,
+                transformation: [
+                  {
+                    width: 1920,
+                    height: 1080,
+                    crop: 'limit',
+                    quality: 'auto:best',
+                    fetch_format: 'auto'
+                  }
+                ]
+              });
+              
               resolve({
-                url: result.secure_url,
+                url: transformedUrl,
+                originalUrl: result.secure_url,
                 publicId: result.public_id,
               });
+            }
           },
         );
 
