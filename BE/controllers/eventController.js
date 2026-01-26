@@ -1,4 +1,4 @@
-const { Event, Application } = require("../models");
+const { Event, Application, BTCProfile } = require("../models");
 
 // @desc    Get all events (public with filters)
 // @route   GET /api/events
@@ -22,9 +22,17 @@ exports.getEvents = async (req, res, next) => {
     const query = { status: "RECRUITING" };
 
     if (keyword) {
+      // Find matches in BTCProfile (agencyName)
+      const matchingBTCs = await BTCProfile.find({
+        agencyName: { $regex: keyword, $options: "i" },
+      }).select("userId");
+
+      const btcIds = matchingBTCs.map((profile) => profile.userId);
+
       query.$or = [
         { title: { $regex: keyword, $options: "i" } },
         { description: { $regex: keyword, $options: "i" } },
+        { btcId: { $in: btcIds } }, // Search by matching BTCs
       ];
     }
 
