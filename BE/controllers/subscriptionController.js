@@ -3,7 +3,6 @@ const crypto = require('crypto');
 const https = require('https');
 const qs = require('qs');
 
-// Helper function to sort object keys for VNPay
 const sortObject = (obj) => {
   const sorted = {};
   const keys = Object.keys(obj).sort();
@@ -13,7 +12,6 @@ const sortObject = (obj) => {
   return sorted;
 };
 
-// Helper function to format date for VNPay
 const formatDate = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -24,7 +22,6 @@ const formatDate = (date) => {
   return `${year}${month}${day}${hours}${minutes}${seconds}`;
 };
 
-// Subscription plans
 const PLANS = {
   FREE: {
     name: 'Free',
@@ -109,7 +106,6 @@ exports.upgradeToPremium = async (req, res, next) => {
       });
     }
 
-    // Validate payment method
     if (!['MOMO', 'VNPAY'].includes(paymentMethod)) {
       return res.status(400).json({
         success: false,
@@ -130,7 +126,6 @@ exports.upgradeToPremium = async (req, res, next) => {
       }
     });
 
-    // Handle MoMo payment
     if (paymentMethod === 'MOMO') {
       try {
         const accessKey = process.env.MOMO_ACCESS_KEY;
@@ -174,7 +169,6 @@ exports.upgradeToPremium = async (req, res, next) => {
           signature
         });
         
-        // Call MoMo API
         const momoResponse = await new Promise((resolve, reject) => {
           const options = {
             hostname: 'test-payment.momo.vn',
@@ -246,7 +240,6 @@ exports.upgradeToPremium = async (req, res, next) => {
       }
     }
 
-    // Handle VNPay payment
     if (paymentMethod === 'VNPAY') {
       try {
         const vnp_TmnCode = process.env.VNPAY_TMN_CODE;
@@ -274,14 +267,12 @@ exports.upgradeToPremium = async (req, res, next) => {
         // Sort params
         vnp_Params = sortObject(vnp_Params);
         
-        // Create signature
         const signData = qs.stringify(vnp_Params, { encode: false });
         const hmac = crypto.createHmac('sha512', vnp_HashSecret);
         const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
         
         vnp_Params['vnp_SecureHash'] = signed;
         
-        // Build payment URL
         const paymentUrl = vnp_Url + '?' + qs.stringify(vnp_Params, { encode: false });
         
         payment.metadata = {
@@ -330,16 +321,20 @@ exports.cancelSubscription = async (req, res, next) => {
       });
     }
 
-
-    user.subscription.autoRenew = false; 
+    user.subscription.plan = 'FREE';
+    user.subscription.expiredAt = null;
+    user.subscription.autoRenew = false;
+    user.subscription.urgentUsed = 0;
+    user.subscription.postUsed = 0;
 
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: 'Subscription will not renew after expiration',
+      message: 'Subscription cancelled successfully',
       data: {
-        expiresAt: user.subscription.expiredAt
+        plan: 'FREE',
+        expiredAt: null
       }
     });
   } catch (error) {
