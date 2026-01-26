@@ -474,7 +474,7 @@ exports.momoReturn = async (req, res, next) => {
         }
       }
       return res.redirect(
-        `${frontendUrl}/payment-success?orderId=${orderId}&transId=${transId}`,
+        `${frontendUrl}/dashboard/profile?payment=success&orderId=${orderId}&transId=${transId}`,
       );
     } else {
       payment.status = "FAILED";
@@ -486,7 +486,7 @@ exports.momoReturn = async (req, res, next) => {
       await payment.save();
 
       return res.redirect(
-        `${frontendUrl}/payment-failed?message=${encodeURIComponent(message)}&code=${resultCode}`,
+        `${frontendUrl}/dashboard/profile?payment=failed&message=${encodeURIComponent(message)}&code=${resultCode}`,
       );
     }
   } catch (error) {
