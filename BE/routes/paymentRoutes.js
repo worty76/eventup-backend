@@ -3,6 +3,7 @@ const {
   getPayments,
   getPaymentByTransactionId,
   vnpayReturn,
+  vnpayNotify,
   momoReturn,
   momoNotify,
 } = require("../controllers/paymentController");
@@ -67,6 +68,18 @@ router.get("/transaction/:transactionId", protect, getPaymentByTransactionId);
  *         description: VNPay return processed
  */
 router.get("/vnpay/return", vnpayReturn);
+
+/**
+ * @swagger
+ * /api/payments/vnpay/notify:
+ *   get:
+ *     summary: IPN từ VNPay (Public)
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: VNPay IPN processed
+ */
+router.get("/vnpay/notify", vnpayNotify);
 
 /**
  * @swagger
