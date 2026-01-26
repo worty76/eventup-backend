@@ -26,7 +26,15 @@ exports.uploadFile = async (req, res, next) => {
         {
           folder: `job-event/${type}`,
           resource_type: "auto",
-          transformation: [{ quality: "auto:best", fetch_format: "auto" }],
+          transformation: [
+            { 
+              width: 1920, 
+              height: 1080, 
+              crop: "limit",
+              quality: "auto:best", 
+              fetch_format: "auto" 
+            }
+          ],
         },
         (error, result) => {
           if (error) reject(error);
@@ -91,7 +99,15 @@ exports.uploadMultipleFiles = async (req, res, next) => {
           {
             folder: `job-event/${type}`,
             resource_type: "auto",
-            transformation: [{ quality: "auto:best", fetch_format: "auto" }],
+            transformation: [
+              { 
+                width: 1920, 
+                height: 1080, 
+                crop: "limit",
+                quality: "auto:best", 
+                fetch_format: "auto" 
+              }
+            ],
           },
           (error, result) => {
             if (error) reject(error);
