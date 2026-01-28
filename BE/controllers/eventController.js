@@ -9,7 +9,7 @@ exports.getEvents = async (req, res, next) => {
       keyword,
       location,
       salary,
-      salaryRange, 
+      salaryRange,
       type,
       timeFrom,
       timeTo,

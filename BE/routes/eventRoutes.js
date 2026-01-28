@@ -180,13 +180,9 @@ router.post(
     body("description").notEmpty().withMessage("Description is required"),
     body("location").notEmpty().withMessage("Location is required"),
     body("eventType").notEmpty().withMessage("Event type is required"),
-    body("salary").notEmpty().withMessage("Salary is required"),
     body("startTime").isISO8601().withMessage("Valid start time is required"),
     body("endTime").isISO8601().withMessage("Valid end time is required"),
     body("deadline").isISO8601().withMessage("Valid deadline is required"),
-    body("quantity")
-      .isInt({ min: 1 })
-      .withMessage("Quantity must be at least 1"),
     validate,
   ],
   createEvent,

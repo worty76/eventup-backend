@@ -34,6 +34,12 @@ const applicationSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    appliedRoles: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     rejectionReason: {
       type: String,
       trim: true,

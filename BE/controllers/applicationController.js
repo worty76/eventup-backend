@@ -13,7 +13,7 @@ const emailService = require("../utils/email");
 exports.applyToEvent = async (req, res, next) => {
   try {
     const { eventId } = req.params;
-    const { coverLetter } = req.body;
+    const { coverLetter, appliedRoles } = req.body;
     const ctvId = req.user._id;
 
     const event = await Event.findById(eventId);
@@ -43,6 +43,7 @@ exports.applyToEvent = async (req, res, next) => {
       eventId,
       ctvId,
       coverLetter,
+      appliedRoles: appliedRoles || [],
       status: "PENDING",
     });
 
@@ -169,7 +170,7 @@ exports.getEventApplications = async (req, res, next) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: applicationsWithProfile, 
+      data: applicationsWithProfile,
     });
   } catch (error) {
     next(error);
@@ -204,6 +205,13 @@ exports.approveApplication = async (req, res, next) => {
       application.assignedRole = assignedRole;
     }
     await application.save();
+
+    // Increment approvedCount in Event
+    const event = await Event.findById(application.eventId._id);
+    if (event) {
+      event.approvedCount = (event.approvedCount || 0) + 1;
+      await event.save();
+    }
 
     await Notification.create({
       userId: application.ctvId,
@@ -309,6 +317,22 @@ exports.bulkApproveApplications = async (req, res, next) => {
         ...(role && { assignedRole: role }),
       },
     );
+
+    // Increment approvedCount for each approved application
+    // We need to group by eventId to update counts efficiently, but here we likely deal with applications for the same event due to UI context usually found in "Event Applications" page.
+    // However, to be safe/correct, we should update the events.
+    // Assuming this endpoint might be used for multiple events (less likely but possible), let's iterate.
+    // Optimization: find unique event IDs and count approvals for each.
+
+    const eventCounts = {};
+    applications.forEach((app) => {
+      const eId = app.eventId._id.toString();
+      eventCounts[eId] = (eventCounts[eId] || 0) + 1;
+    });
+
+    for (const [eId, count] of Object.entries(eventCounts)) {
+      await Event.findByIdAndUpdate(eId, { $inc: { approvedCount: count } });
+    }
 
     // Create notifications
     const notificationPromises = applications.map((app) =>
