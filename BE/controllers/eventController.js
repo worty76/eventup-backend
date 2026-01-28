@@ -126,6 +126,33 @@ exports.getEvent = async (req, res, next) => {
       eventObj.isApplied = !!application;
     }
 
+    // Calculate approved count for each role
+    const approvedApps = await Application.find({
+      eventId: event._id,
+      status: "APPROVED",
+    }).select("assignedRoles assignedRole");
+
+    const roleCounts = {};
+    approvedApps.forEach((app) => {
+      // Use assignedRoles if available (newer logic)
+      if (app.assignedRoles && app.assignedRoles.length > 0) {
+        app.assignedRoles.forEach((role) => {
+          roleCounts[role] = (roleCounts[role] || 0) + 1;
+        });
+      }
+      // Fallback to legacy assignedRole
+      else if (app.assignedRole) {
+        roleCounts[app.assignedRole] = (roleCounts[app.assignedRole] || 0) + 1;
+      }
+    });
+
+    if (eventObj.jobDetailsItems) {
+      eventObj.jobDetailsItems = eventObj.jobDetailsItems.map((item) => ({
+        ...item,
+        approvedCount: roleCounts[item.role] || 0,
+      }));
+    }
+
     res.status(200).json({
       success: true,
       data: eventObj,

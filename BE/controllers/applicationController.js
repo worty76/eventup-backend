@@ -183,7 +183,7 @@ exports.getEventApplications = async (req, res, next) => {
 exports.approveApplication = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { assignedRole } = req.body;
+    const { assignedRoles } = req.body;
 
     const application = await Application.findById(id).populate("eventId");
     if (!application) {
@@ -201,15 +201,25 @@ exports.approveApplication = async (req, res, next) => {
     }
 
     application.status = "APPROVED";
-    if (assignedRole) {
-      application.assignedRole = assignedRole;
-    }
+
+    // Assign roles: use provided roles or default to all applied roles
+    const rolesToAssign =
+      assignedRoles && assignedRoles.length > 0
+        ? assignedRoles
+        : application.appliedRoles && application.appliedRoles.length > 0
+          ? application.appliedRoles
+          : ["TV"];
+
+    application.assignedRoles = rolesToAssign;
+    // Legacy support: set first role to assignedRole
+    application.assignedRole = rolesToAssign[0];
+
     await application.save();
 
-    // Increment approvedCount in Event
+    // Increment approvedCount in Event by number of assigned roles
     const event = await Event.findById(application.eventId._id);
     if (event) {
-      event.approvedCount = (event.approvedCount || 0) + 1;
+      event.approvedCount = (event.approvedCount || 0) + rolesToAssign.length;
       await event.save();
     }
 
