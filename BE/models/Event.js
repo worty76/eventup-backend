@@ -13,10 +13,13 @@ const jobDetailItemSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    workTime: {
-      type: String,
+    startTime: {
+      type: Date,
       required: true,
-      trim: true,
+    },
+    endTime: {
+      type: Date,
+      required: true,
     },
     quantity: {
       type: Number,

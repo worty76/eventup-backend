@@ -34,6 +34,12 @@ const applicationSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    assignedRoles: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     appliedRoles: [
       {
         type: String,
