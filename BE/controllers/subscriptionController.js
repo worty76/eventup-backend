@@ -2,6 +2,7 @@ const { User, Payment } = require('../models');
 const crypto = require('crypto');
 const https = require('https');
 const qs = require('qs');
+const { PayOS } = require('@payos/node');
 
 const sortObject = (obj) => {
   const sorted = {};
@@ -106,10 +107,10 @@ exports.upgradeToPremium = async (req, res, next) => {
       });
     }
 
-    if (!['MOMO', 'VNPAY'].includes(paymentMethod)) {
+    if (!['MOMO', 'VNPAY', 'PAYOS'].includes(paymentMethod)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid payment method. Please use MOMO or VNPAY.'
+        message: 'Invalid payment method. Please use MOMO, VNPAY, or PAYOS.'
       });
     }
 
@@ -236,6 +237,56 @@ exports.upgradeToPremium = async (req, res, next) => {
           success: false,
           message: 'Failed to create MoMo payment',
           error: momoError.message
+        });
+      }
+    }
+
+    if (paymentMethod === 'PAYOS') {
+      try {
+        const payos = new PayOS({
+          clientId: process.env.PAYOS_CLIENT_ID,
+          apiKey: process.env.PAYOS_API_KEY,
+          checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+        });
+
+        const paymentLinkData = {
+          orderCode: parseInt(payment.transactionId.replace(/[^0-9]/g, '').slice(-9)),
+          amount: payment.amount,
+          description: 'Premium Subscription',
+          returnUrl: process.env.PAYOS_RETURN_URL,
+          cancelUrl: process.env.PAYOS_CANCEL_URL || process.env.PAYOS_RETURN_URL,
+        };
+
+        const paymentLink = await payos.paymentRequests.create(paymentLinkData);
+
+        payment.metadata = {
+          payosCheckoutUrl: paymentLink.checkoutUrl,
+          payosOrderCode: paymentLink.orderCode,
+        };
+        await payment.save();
+
+        return res.status(200).json({
+          success: true,
+          message: 'Payment created successfully. Redirecting to PayOS...',
+          data: {
+            paymentId: payment._id,
+            amount: payment.amount,
+            method: 'PAYOS',
+            paymentUrl: paymentLink.checkoutUrl,
+            qrCode: paymentLink.qrCode,
+            orderId: payment.transactionId,
+          },
+        });
+      } catch (payosError) {
+        console.error('PayOS API Error:', payosError);
+        payment.status = 'FAILED';
+        payment.metadata = { error: payosError.message };
+        await payment.save();
+
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create PayOS payment',
+          error: payosError.message,
         });
       }
     }

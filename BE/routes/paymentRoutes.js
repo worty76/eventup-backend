@@ -6,6 +6,8 @@ const {
   vnpayNotify,
   momoReturn,
   momoNotify,
+  payosReturn,
+  payosNotify,
 } = require("../controllers/paymentController");
 const { protect } = require("../middleware/auth");
 
@@ -104,5 +106,29 @@ router.get("/momo/return", momoReturn);
  *         description: MoMo notification processed
  */
 router.post("/momo/notify", momoNotify);
+
+/**
+ * @swagger
+ * /api/payments/payos/return:
+ *   get:
+ *     summary: Return URL từ PayOS (Public)
+ *     tags: [Payments]
+ *     responses:
+ *       302:
+ *         description: Redirect to frontend
+ */
+router.get("/payos/return", payosReturn);
+
+/**
+ * @swagger
+ * /api/payments/payos/notify:
+ *   post:
+ *     summary: Webhook notification từ PayOS (Public)
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: PayOS notification processed
+ */
+router.post("/payos/notify", payosNotify);
 
 module.exports = router;

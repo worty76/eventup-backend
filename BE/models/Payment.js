@@ -14,7 +14,7 @@ const paymentSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ["MOMO", "VNPAY", "STRIPE", "BANK_TRANSFER"],
+      enum: ["MOMO", "VNPAY", "PAYOS"],
       required: [true, "Payment method is required"],
     },
     status: {
