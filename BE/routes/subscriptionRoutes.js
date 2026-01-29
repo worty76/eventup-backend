@@ -73,13 +73,13 @@ router.get('/current', protect, getCurrentSubscription);
  *             properties:
  *               paymentMethod:
  *                 type: string
- *                 enum: [MOMO, VNPAY, STRIPE]
+ *                 enum: [MOMO, VNPAY, PAYOS]
  *     responses:
  *       200:
  *         description: Tạo link thanh toán thành công
  */
 router.post('/upgrade', protect, isBTC, [
-  body('paymentMethod').isIn(['MOMO', 'VNPAY', 'STRIPE']).withMessage('Invalid payment method'),
+  body('paymentMethod').isIn(['MOMO', 'VNPAY', 'PAYOS']).withMessage('Invalid payment method'),
   validate
 ], upgradeToPremium);
 

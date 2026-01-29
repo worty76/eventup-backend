@@ -21,6 +21,7 @@
   "description": "Backend API for Job & Event Recruitment Platform",
   "dependencies": {
     "@getbrevo/brevo": "^3.0.1",
+    "@payos/node": "^2.0.4",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
     "cookie-parser": "^1.4.6",

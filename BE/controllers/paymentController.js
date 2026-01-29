@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const https = require("https");
 const querystring = require("querystring");
+const { PayOS } = require("@payos/node");
 const { Payment, User } = require("../models");
 
 const sortObject = (obj) => {
@@ -154,6 +155,30 @@ const createVNPayPayment = async (payment, ipAddr = "127.0.0.1") => {
   const paymentUrl = vnp_Url + "?" + qs.stringify(vnp_Params, { encode: false });
 
   return { paymentUrl };
+};
+
+const createPayOSPayment = async (payment) => {
+  const payos = new PayOS({
+    clientId: process.env.PAYOS_CLIENT_ID,
+    apiKey: process.env.PAYOS_API_KEY,
+    checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+  });
+
+  const paymentLinkData = {
+    orderCode: parseInt(payment.transactionId),
+    amount: payment.amount,
+    description: payment.description || "Payment for subscription",
+    returnUrl: process.env.PAYOS_RETURN_URL,
+    cancelUrl: process.env.PAYOS_CANCEL_URL || process.env.PAYOS_RETURN_URL,
+  };
+
+  try {
+    const paymentLink = await payos.paymentRequests.create(paymentLinkData);
+    return paymentLink;
+  } catch (error) {
+    console.error("PayOS Payment Creation Error:", error);
+    throw error;
+  }
 };
 
 // @desc    Get user's payment history
@@ -493,6 +518,170 @@ exports.momoReturn = async (req, res, next) => {
     console.error("MoMo Return Error:", error);
     const frontendUrl = process.env.CORS_ORIGIN || "http://localhost:3000";
     res.redirect(`${frontendUrl}/payment-error?reason=server_error`);
+  }
+};
+
+// @desc    PayOS return URL handler
+// @route   GET /api/payments/payos/return
+// @access  Public
+exports.payosReturn = async (req, res, next) => {
+  try {
+    const { orderCode, status, cancel } = req.query;
+    const frontendUrl = process.env.CORS_ORIGIN || "http://localhost:3000";
+
+    const payment = await Payment.findOne({ 'metadata.payosOrderCode': parseInt(orderCode) });
+
+    if (!payment) {
+      console.error("PayOS Return: Payment not found:", orderCode);
+      return res.redirect(`${frontendUrl}/payment-error?reason=not_found`);
+    }
+
+    if (cancel === "true" || status === "CANCELLED") {
+      payment.status = "FAILED";
+      payment.metadata = {
+        ...payment.metadata,
+        payosStatus: "CANCELLED",
+        cancelledAt: new Date(),
+      };
+      await payment.save();
+      
+      return res.redirect(`${frontendUrl}/payment-failed?orderId=${orderCode}`);
+    }
+
+    if (status === "PAID") {
+      payment.status = "SUCCESS";
+      payment.metadata = {
+        ...payment.metadata,
+        payosStatus: "PAID",
+        paidAt: new Date(),
+      };
+      await payment.save();
+
+      // Update user subscription
+      if (payment.subscriptionData && payment.subscriptionData.plan) {
+        const user = await User.findById(payment.userId);
+
+        if (user) {
+          const expiryDate = new Date();
+          expiryDate.setDate(
+            expiryDate.getDate() + payment.subscriptionData.duration,
+          );
+
+          user.subscription.plan = payment.subscriptionData.plan;
+          user.subscription.expiredAt = expiryDate;
+          user.subscription.urgentUsed = 0;
+          user.subscription.postUsed = 0;
+
+          await user.save();
+        }
+      }
+
+      return res.redirect(
+        `${frontendUrl}/payment-success?orderId=${orderCode}`,
+      );
+    } else {
+      // Other statuses (PENDING, PROCESSING, etc.)
+      return res.redirect(
+        `${frontendUrl}/payment-pending?orderId=${orderCode}`,
+      );
+    }
+  } catch (error) {
+    console.error("PayOS Return Error:", error);
+    const frontendUrl = process.env.CORS_ORIGIN || "http://localhost:3000";
+    res.redirect(`${frontendUrl}/payment-error?reason=server_error`);
+  }
+};
+
+// @desc    PayOS webhook/notify handler
+// @route   POST /api/payments/payos/notify
+// @access  Public
+exports.payosNotify = async (req, res, next) => {
+  try {
+    const payos = new PayOS({
+      clientId: process.env.PAYOS_CLIENT_ID,
+      apiKey: process.env.PAYOS_API_KEY,
+      checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+    });
+
+    // Verify webhook signature
+    const webhookData = await payos.webhooks.verify(req.body);
+
+    if (!webhookData) {
+      console.error("PayOS Notify: Invalid webhook signature");
+      return res.status(400).json({
+        success: false,
+        message: "Invalid signature",
+      });
+    }
+
+    const { orderCode, amount, description, reference, code, desc } = webhookData.data;
+
+    const payment = await Payment.findOne({ 'metadata.payosOrderCode': orderCode });
+
+    if (!payment) {
+      console.error("PayOS Notify: Payment not found:", orderCode);
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    // Check if payment is already processed
+    if (payment.status !== "PENDING") {
+      return res.status(200).json({
+        success: true,
+        message: "Payment already processed",
+      });
+    }
+
+    // code '00' means success in PayOS
+    if (code === "00") {
+      payment.status = "SUCCESS";
+      payment.metadata = {
+        ...payment.metadata,
+        payosReference: reference,
+        payosDescription: description,
+      };
+      await payment.save();
+
+      // Update user subscription if applicable
+      if (payment.subscriptionData && payment.subscriptionData.plan) {
+        const user = await User.findById(payment.userId);
+
+        if (user) {
+          const expiryDate = new Date();
+          expiryDate.setDate(
+            expiryDate.getDate() + payment.subscriptionData.duration,
+          );
+
+          user.subscription.plan = payment.subscriptionData.plan;
+          user.subscription.expiredAt = expiryDate;
+          user.subscription.urgentUsed = 0;
+          user.subscription.postUsed = 0;
+
+          await user.save();
+        }
+      }
+    } else {
+      payment.status = "FAILED";
+      payment.metadata = {
+        ...payment.metadata,
+        errorMessage: desc,
+        errorCode: code,
+      };
+      await payment.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Webhook processed",
+    });
+  } catch (error) {
+    console.error("PayOS Notify Error:", error);
+    res.status(200).json({
+      success: false,
+      message: "Webhook processing failed",
+    });
   }
 };
 
