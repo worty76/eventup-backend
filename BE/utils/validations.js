@@ -37,7 +37,14 @@ const createEventValidation = [
   body('startTime').isISO8601().withMessage('Valid start time is required'),
   body('endTime').isISO8601().withMessage('Valid end time is required'),
   body('deadline').isISO8601().withMessage('Valid deadline is required'),
-  body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
+  body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+  // Validation for jobDetailsItems array
+  body('jobDetailsItems').optional().isArray().withMessage('Job details items must be an array'),
+  body('jobDetailsItems.*.role').notEmpty().withMessage('Role is required for each job detail item'),
+  body('jobDetailsItems.*.task').notEmpty().withMessage('Task is required for each job detail item'),
+  body('jobDetailsItems.*.workTime').notEmpty().withMessage('Work time is required for each job detail item'),
+  body('jobDetailsItems.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1 for each job detail item'),
+  body('jobDetailsItems.*.salary').notEmpty().withMessage('Salary is required for each job detail item')
 ];
 
 // Application validations

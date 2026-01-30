@@ -15,8 +15,9 @@ const jobDetailItemSchema = new mongoose.Schema(
     },
     workTime: {
       type: String,
-      required: true,
+      required: false,  //thay doi thanh false de khong bat buoc phai co workTime
       trim: true,
+      default: "",
     },
     quantity: {
       type: Number,

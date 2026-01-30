@@ -85,7 +85,7 @@ exports.getCTVApplications = async (req, res, next) => {
     const applications = await Application.find(query)
       .populate({
         path: "eventId",
-        select: "title location startTime endTime salary eventType btcId",
+        select: "title location startTime endTime salary eventType btcId jobDetailsItems",
         populate: {
           path: "btcId",
           select: "agencyName fullName email avatarUrl",
@@ -183,7 +183,7 @@ exports.getEventApplications = async (req, res, next) => {
 exports.approveApplication = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { assignedRole } = req.body;
+    const { assignedRole, assignedWorkTime, assignedRoles } = req.body;
 
     const application = await Application.findById(id).populate("eventId");
     if (!application) {
@@ -201,12 +201,38 @@ exports.approveApplication = async (req, res, next) => {
     }
 
     application.status = "APPROVED";
-    if (assignedRole) {
-      application.assignedRole = assignedRole;
+    
+    // Handle new assignedRoles array format (multiple roles with details)
+    if (assignedRoles && Array.isArray(assignedRoles) && assignedRoles.length > 0) {
+      application.assignedRoles = assignedRoles;
+      // Set backward compatible fields from first role
+      application.assignedRole = assignedRoles[0].role;
+      
+      // Format time properly for display
+      const startDate = new Date(assignedRoles[0].startTime);
+      const endDate = new Date(assignedRoles[0].endTime);
+      application.assignedWorkTime = `${startDate.toLocaleString('vi-VN', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })} - ${endDate.toLocaleString('vi-VN', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })}`;
+    } else {
+      // Fallback to old format for backward compatibility
+      if (assignedRole) {
+        application.assignedRole = assignedRole;
+      }
+      if (assignedWorkTime) {
+        application.assignedWorkTime = assignedWorkTime;
+      }
     }
+    
     await application.save();
 
-    // Increment approvedCount in Event
     const event = await Event.findById(application.eventId._id);
     if (event) {
       event.approvedCount = (event.approvedCount || 0) + 1;
@@ -283,7 +309,7 @@ exports.rejectApplication = async (req, res, next) => {
 // @access  Private (BTC + Premium)
 exports.bulkApproveApplications = async (req, res, next) => {
   try {
-    const { applicationIds, role } = req.body;
+    const { applicationIds, role, workTime, assignedRoles } = req.body;
 
     if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
       return res.status(400).json({
@@ -292,12 +318,10 @@ exports.bulkApproveApplications = async (req, res, next) => {
       });
     }
 
-    // Get all applications
     const applications = await Application.find({
       _id: { $in: applicationIds },
     }).populate("eventId");
 
-    // Check ownership for all applications
     const unauthorized = applications.some(
       (app) => app.eventId.btcId.toString() !== req.user._id.toString(),
     );
@@ -309,20 +333,22 @@ exports.bulkApproveApplications = async (req, res, next) => {
       });
     }
 
-    // Bulk update
+    const updateObj = { status: "APPROVED" };
+    
+    if (assignedRoles && Array.isArray(assignedRoles) && assignedRoles.length > 0) {
+      updateObj.assignedRoles = assignedRoles;
+      updateObj.assignedRole = assignedRoles[0].role;
+      updateObj.assignedWorkTime = `${new Date(assignedRoles[0].startTime).toLocaleTimeString('vi-VN')} - ${new Date(assignedRoles[0].endTime).toLocaleTimeString('vi-VN')}`;
+    } else {
+      if (role) updateObj.assignedRole = role;
+      if (workTime) updateObj.assignedWorkTime = workTime;
+    }
+
     await Application.updateMany(
       { _id: { $in: applicationIds } },
-      {
-        status: "APPROVED",
-        ...(role && { assignedRole: role }),
-      },
+      updateObj,
     );
 
-    // Increment approvedCount for each approved application
-    // We need to group by eventId to update counts efficiently, but here we likely deal with applications for the same event due to UI context usually found in "Event Applications" page.
-    // However, to be safe/correct, we should update the events.
-    // Assuming this endpoint might be used for multiple events (less likely but possible), let's iterate.
-    // Optimization: find unique event IDs and count approvals for each.
 
     const eventCounts = {};
     applications.forEach((app) => {
@@ -334,7 +360,6 @@ exports.bulkApproveApplications = async (req, res, next) => {
       await Event.findByIdAndUpdate(eId, { $inc: { approvedCount: count } });
     }
 
-    // Create notifications
     const notificationPromises = applications.map((app) =>
       Notification.create({
         userId: app.ctvId,
@@ -371,12 +396,10 @@ exports.bulkRejectApplications = async (req, res, next) => {
       });
     }
 
-    // Get all applications
     const applications = await Application.find({
       _id: { $in: applicationIds },
     }).populate("eventId");
 
-    // Check ownership for all applications
     const unauthorized = applications.some(
       (app) => app.eventId.btcId.toString() !== req.user._id.toString(),
     );
@@ -388,7 +411,6 @@ exports.bulkRejectApplications = async (req, res, next) => {
       });
     }
 
-    // Bulk update
     await Application.updateMany(
       { _id: { $in: applicationIds } },
       {
@@ -397,7 +419,6 @@ exports.bulkRejectApplications = async (req, res, next) => {
       },
     );
 
-    // Create notifications
     const notificationPromises = applications.map((app) =>
       Notification.create({
         userId: app.ctvId,
@@ -435,7 +456,6 @@ exports.completeApplication = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (application.eventId.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -443,7 +463,6 @@ exports.completeApplication = async (req, res, next) => {
       });
     }
 
-    // Only APPROVED applications can be completed
     if (application.status !== "APPROVED") {
       return res.status(400).json({
         success: false,
@@ -454,7 +473,6 @@ exports.completeApplication = async (req, res, next) => {
     application.status = "COMPLETED";
     await application.save();
 
-    // Create notification for CTV
     await Notification.create({
       userId: application.ctvId,
       type: "COMPLETION",
@@ -464,12 +482,10 @@ exports.completeApplication = async (req, res, next) => {
       relatedModel: "Application",
     });
 
-    // Update CTV Trust Score (+1)
     const ctvProfile = await CTVProfile.findOne({ userId: application.ctvId });
     if (ctvProfile) {
       ctvProfile.updateTrustScore(1);
 
-      // Also add to joinedEvents if not exists
       const alreadyJoined = ctvProfile.joinedEvents.some(
         (e) => e.eventId.toString() === application.eventId._id.toString(),
       );
@@ -501,10 +517,8 @@ exports.getCTVDashboardStats = async (req, res, next) => {
   try {
     const ctvId = req.user._id;
 
-    // 1. Total applications
     const totalApplications = await Application.countDocuments({ ctvId });
 
-    // 2. Approved/Completed count
     const approvedCount = await Application.countDocuments({
       ctvId,
       status: "APPROVED",
@@ -515,19 +529,16 @@ exports.getCTVDashboardStats = async (req, res, next) => {
       status: "COMPLETED",
     });
 
-    // 3. Pending count
     const pendingCount = await Application.countDocuments({
       ctvId,
       status: "PENDING",
     });
 
-    // 4. Rejected count
     const rejectedCount = await Application.countDocuments({
       ctvId,
       status: "REJECTED",
     });
 
-    // 5. Get upcoming events (approved applications for future events)
     const upcomingEvents = await Application.find({
       ctvId,
       status: { $in: ["APPROVED"] },
@@ -552,7 +563,6 @@ exports.getCTVDashboardStats = async (req, res, next) => {
         role: app.assignedRole,
       }));
 
-    // 6. Chart Data (Applications by status for pie chart or last 7 days activity)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -573,7 +583,6 @@ exports.getCTVDashboardStats = async (req, res, next) => {
       { $sort: { _id: 1 } },
     ]);
 
-    // Fill missing days
     const chartData = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -598,7 +607,7 @@ exports.getCTVDashboardStats = async (req, res, next) => {
         completedCount,
         pendingCount,
         rejectedCount,
-        eventsJoined: completedCount, // Completed = events joined
+        eventsJoined: completedCount, 
         upcomingEvents: upcomingEventsFiltered,
         chartData,
       },
@@ -624,7 +633,6 @@ exports.reportViolation = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (application.eventId.btcId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -632,7 +640,6 @@ exports.reportViolation = async (req, res, next) => {
       });
     }
 
-    // Only APPROVED applications can be reported as violation
     if (application.status !== "APPROVED") {
       return res.status(400).json({
         success: false,
@@ -644,7 +651,6 @@ exports.reportViolation = async (req, res, next) => {
     application.notes = reason || "No-show / Violation reported by Organizer";
     await application.save();
 
-    // Create notification for CTV
     await Notification.create({
       userId: application.ctvId,
       type: "VIOLATION",
@@ -654,15 +660,13 @@ exports.reportViolation = async (req, res, next) => {
       relatedModel: "Application",
     });
 
-    // Immediate penalty: Update CTV Trust Score (-2)
     const ctvProfile = await CTVProfile.findOne({ userId: application.ctvId });
     if (ctvProfile) {
-      ctvProfile.updateTrustScore(-2); // Direct deduction
+      ctvProfile.updateTrustScore(-2); 
 
-      // Add to joinedEvents as history tag
       ctvProfile.joinedEvents.push({
         eventId: application.eventId._id,
-        role: "No-show", // Tag as No-show
+        role: "No-show", 
         joinedAt: new Date(),
       });
 
