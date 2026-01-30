@@ -1,4 +1,4 @@
-const { Event, Application } = require("../models");
+const { Event, Application, BTCProfile } = require("../models");
 
 // @desc    Get all events (public with filters)
 // @route   GET /api/events
@@ -21,9 +21,17 @@ exports.getEvents = async (req, res, next) => {
     const query = { status: "RECRUITING" };
 
     if (keyword) {
+      // Find matches in BTCProfile (agencyName)
+      const matchingBTCs = await BTCProfile.find({
+        agencyName: { $regex: keyword, $options: "i" },
+      }).select("userId");
+
+      const btcIds = matchingBTCs.map((profile) => profile.userId);
+
       query.$or = [
         { title: { $regex: keyword, $options: "i" } },
         { description: { $regex: keyword, $options: "i" } },
+        { btcId: { $in: btcIds } }, // Search by matching BTCs
       ];
     }
 
@@ -124,6 +132,33 @@ exports.getEvent = async (req, res, next) => {
         ctvId: req.user._id,
       });
       eventObj.isApplied = !!application;
+    }
+
+    // Calculate approved count for each role
+    const approvedApps = await Application.find({
+      eventId: event._id,
+      status: "APPROVED",
+    }).select("assignedRoles assignedRole");
+
+    const roleCounts = {};
+    approvedApps.forEach((app) => {
+      // Use assignedRoles if available (newer logic)
+      if (app.assignedRoles && app.assignedRoles.length > 0) {
+        app.assignedRoles.forEach((role) => {
+          roleCounts[role] = (roleCounts[role] || 0) + 1;
+        });
+      }
+      // Fallback to legacy assignedRole
+      else if (app.assignedRole) {
+        roleCounts[app.assignedRole] = (roleCounts[app.assignedRole] || 0) + 1;
+      }
+    });
+
+    if (eventObj.jobDetailsItems) {
+      eventObj.jobDetailsItems = eventObj.jobDetailsItems.map((item) => ({
+        ...item,
+        approvedCount: roleCounts[item.role] || 0,
+      }));
     }
 
     res.status(200).json({
