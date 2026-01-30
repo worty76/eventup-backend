@@ -13,13 +13,11 @@ const jobDetailItemSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    startTime: {
-      type: Date,
-      required: true,
-    },
-    endTime: {
-      type: Date,
-      required: true,
+    workTime: {
+      type: String,
+      required: false,  //thay doi thanh false de khong bat buoc phai co workTime
+      trim: true,
+      default: "",
     },
     quantity: {
       type: Number,

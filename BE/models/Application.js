@@ -34,10 +34,32 @@ const applicationSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    assignedWorkTime: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     assignedRoles: [
       {
-        type: String,
-        trim: true,
+        role: {
+          type: String,
+          trim: true,
+        },
+        startTime: {
+          type: Date,
+        },
+        endTime: {
+          type: Date,
+        },
+        task: {
+          type: String,
+          trim: true,
+        },
+        salary: {
+          type: String,
+          trim: true,
+        },
+        _id: false,
       },
     ],
     appliedRoles: [

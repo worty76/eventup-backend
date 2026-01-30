@@ -145,6 +145,10 @@ router.get(
  *             properties:
  *               assignedRole:
  *                 type: string
+ *                 description: Vai trò được gán
+ *               assignedWorkTime:
+ *                 type: string
+ *                 description: Thời gian ca làm việc
  *     responses:
  *       200:
  *         description: Chấp nhận thành công
@@ -153,7 +157,17 @@ router.post(
   "/:id/approve",
   protect,
   isBTC,
-  [body("assignedRole").optional().isString(), validate],
+  [
+    body("assignedRole").optional().isString(),
+    body("assignedWorkTime").optional().isString(),
+    body("assignedRoles").optional().isArray(),
+    body("assignedRoles.*.role").optional().isString(),
+    body("assignedRoles.*.startTime").optional().isISO8601(),
+    body("assignedRoles.*.endTime").optional().isISO8601(),
+    body("assignedRoles.*.task").optional().isString(),
+    body("assignedRoles.*.salary").optional().isString(),
+    validate
+  ],
   approveApplication,
 );
 
@@ -272,6 +286,10 @@ router.post(
  *                   type: string
  *               role:
  *                 type: string
+ *                 description: Vai trò được gán
+ *               workTime:
+ *                 type: string
+ *                 description: Thời gian ca làm việc
  *     responses:
  *       200:
  *         description: Chấp nhận thành công
@@ -290,6 +308,13 @@ router.post(
       .isArray()
       .withMessage("Application IDs must be an array"),
     body("role").optional().isString(),
+    body("workTime").optional().isString(),
+    body("assignedRoles").optional().isArray(),
+    body("assignedRoles.*.role").optional().isString(),
+    body("assignedRoles.*.startTime").optional().isISO8601(),
+    body("assignedRoles.*.endTime").optional().isISO8601(),
+    body("assignedRoles.*.task").optional().isString(),
+    body("assignedRoles.*.salary").optional().isString(),
     validate,
   ],
   bulkApproveApplications,
