@@ -19,6 +19,14 @@ const jobDetailItemSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    startTime: {
+      type: Date,
+      required: false,
+    },
+    endTime: {
+      type: Date,
+      required: false,
+    },
     quantity: {
       type: Number,
       required: true,
