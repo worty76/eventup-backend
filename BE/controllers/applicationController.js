@@ -235,7 +235,7 @@ exports.approveApplication = async (req, res, next) => {
 
     const event = await Event.findById(application.eventId._id);
     if (event) {
-      event.approvedCount = (event.approvedCount || 0) + 1;
+      event.approvedCount = (event.approvedCount || 0) + rolesToAssign.length;
       await event.save();
     }
 
