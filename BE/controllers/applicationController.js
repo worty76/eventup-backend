@@ -85,7 +85,8 @@ exports.getCTVApplications = async (req, res, next) => {
     const applications = await Application.find(query)
       .populate({
         path: "eventId",
-        select: "title location startTime endTime salary eventType btcId jobDetailsItems",
+        select:
+          "title location startTime endTime salary eventType btcId jobDetailsItems",
         populate: {
           path: "btcId",
           select: "agencyName fullName email avatarUrl",
@@ -201,25 +202,29 @@ exports.approveApplication = async (req, res, next) => {
     }
 
     application.status = "APPROVED";
-    
+
     // Handle new assignedRoles array format (multiple roles with details)
-    if (assignedRoles && Array.isArray(assignedRoles) && assignedRoles.length > 0) {
+    if (
+      assignedRoles &&
+      Array.isArray(assignedRoles) &&
+      assignedRoles.length > 0
+    ) {
       application.assignedRoles = assignedRoles;
       // Set backward compatible fields from first role
       application.assignedRole = assignedRoles[0].role;
-      
+
       // Format time properly for display
       const startDate = new Date(assignedRoles[0].startTime);
       const endDate = new Date(assignedRoles[0].endTime);
-      application.assignedWorkTime = `${startDate.toLocaleString('vi-VN', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric',
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })} - ${endDate.toLocaleString('vi-VN', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+      application.assignedWorkTime = `${startDate.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })} - ${endDate.toLocaleString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
       })}`;
     } else {
       // Fallback to old format for backward compatibility
@@ -230,12 +235,17 @@ exports.approveApplication = async (req, res, next) => {
         application.assignedWorkTime = assignedWorkTime;
       }
     }
-    
+
     await application.save();
 
     const event = await Event.findById(application.eventId._id);
     if (event) {
-      event.approvedCount = (event.approvedCount || 0) + rolesToAssign.length;
+      // Count roles based on assignedRoles array if present, otherwise count as 1
+      const rolesCount =
+        assignedRoles && Array.isArray(assignedRoles)
+          ? assignedRoles.length
+          : 1;
+      event.approvedCount = (event.approvedCount || 0) + rolesCount;
       await event.save();
     }
 
@@ -334,21 +344,21 @@ exports.bulkApproveApplications = async (req, res, next) => {
     }
 
     const updateObj = { status: "APPROVED" };
-    
-    if (assignedRoles && Array.isArray(assignedRoles) && assignedRoles.length > 0) {
+
+    if (
+      assignedRoles &&
+      Array.isArray(assignedRoles) &&
+      assignedRoles.length > 0
+    ) {
       updateObj.assignedRoles = assignedRoles;
       updateObj.assignedRole = assignedRoles[0].role;
-      updateObj.assignedWorkTime = `${new Date(assignedRoles[0].startTime).toLocaleTimeString('vi-VN')} - ${new Date(assignedRoles[0].endTime).toLocaleTimeString('vi-VN')}`;
+      updateObj.assignedWorkTime = `${new Date(assignedRoles[0].startTime).toLocaleTimeString("vi-VN")} - ${new Date(assignedRoles[0].endTime).toLocaleTimeString("vi-VN")}`;
     } else {
       if (role) updateObj.assignedRole = role;
       if (workTime) updateObj.assignedWorkTime = workTime;
     }
 
-    await Application.updateMany(
-      { _id: { $in: applicationIds } },
-      updateObj,
-    );
-
+    await Application.updateMany({ _id: { $in: applicationIds } }, updateObj);
 
     const eventCounts = {};
     applications.forEach((app) => {
@@ -607,7 +617,7 @@ exports.getCTVDashboardStats = async (req, res, next) => {
         completedCount,
         pendingCount,
         rejectedCount,
-        eventsJoined: completedCount, 
+        eventsJoined: completedCount,
         upcomingEvents: upcomingEventsFiltered,
         chartData,
       },
@@ -662,11 +672,11 @@ exports.reportViolation = async (req, res, next) => {
 
     const ctvProfile = await CTVProfile.findOne({ userId: application.ctvId });
     if (ctvProfile) {
-      ctvProfile.updateTrustScore(-2); 
+      ctvProfile.updateTrustScore(-2);
 
       ctvProfile.joinedEvents.push({
         eventId: application.eventId._id,
-        role: "No-show", 
+        role: "No-show",
         joinedAt: new Date(),
       });
 
