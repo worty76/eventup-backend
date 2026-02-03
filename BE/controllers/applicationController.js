@@ -700,7 +700,6 @@ exports.autoCompleteEvents = async () => {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-    // 1. Find events that ended more than 3 days ago
     const pastEvents = await Event.find({
       endTime: { $lt: threeDaysAgo },
     }).select("_id title");
@@ -709,7 +708,6 @@ exports.autoCompleteEvents = async () => {
 
     if (pastEventIds.length === 0) return 0;
 
-    // 2. Find applications that are still just "APPROVED" for these events
     const pendingApps = await Application.find({
       eventId: { $in: pastEventIds },
       status: "APPROVED",
@@ -717,12 +715,10 @@ exports.autoCompleteEvents = async () => {
 
     let completedCount = 0;
 
-    // 3. Process each application (mark complete + add trust score)
     for (const app of pendingApps) {
       app.status = "COMPLETED";
       await app.save();
 
-      // Notification
       await Notification.create({
         userId: app.ctvId,
         type: "COMPLETION",
@@ -732,12 +728,10 @@ exports.autoCompleteEvents = async () => {
         relatedModel: "Application",
       });
 
-      // Trust Score +1
       const ctvProfile = await CTVProfile.findOne({ userId: app.ctvId });
       if (ctvProfile) {
         ctvProfile.updateTrustScore(1);
 
-        // Add to joinedEvents logic (duplicated from completeApplication)
         const alreadyJoined = ctvProfile.joinedEvents.some(
           (e) => e.eventId.toString() === app.eventId.toString(),
         );
@@ -772,7 +766,6 @@ exports.sendCompletionReminders = async () => {
     const twentyFiveHoursAgo = new Date();
     twentyFiveHoursAgo.setHours(twentyFiveHoursAgo.getHours() - 25);
 
-    // 1. Find events that ended between 24 and 25 hours ago
     const events = await Event.find({
       endTime: {
         $lt: twentyFourHoursAgo,
@@ -783,14 +776,12 @@ exports.sendCompletionReminders = async () => {
     let reminderCount = 0;
 
     for (const event of events) {
-      // Check if there are any APPROVED applications (needing completion/review)
       const hasPendingApps = await Application.exists({
         eventId: event._id,
         status: "APPROVED",
       });
 
       if (hasPendingApps) {
-        // Send notification to BTC
         await Notification.create({
           userId: event.btcId,
           type: "REMINDER",
@@ -823,26 +814,19 @@ exports.sendPreEventReminders = async () => {
       now.getTime() + 24 * 60 * 60 * 1000 + 10 * 60 * 1000,
     );
 
-    // 1. Find events starting in roughly 24 hours (10 min window to avoid duplicates if cron runs every 10 mins)
-    // Adjust window based on cron frequency. Assuming cron runs frequently.
-    // Actually, better to simply check >= 24h and < 24h + interval.
-    // Let's assume cron runs every hour? or every 15 mins?
-    // Let's use a wider window and rely on "reminderSent" flag if possible, or just exact window if cron is reliable.
-    // For simplicity here, let's assume cron runs every 10 mins.
 
     const events = await Event.find({
       startTime: {
         $gte: twentyFourHoursFromNow,
         $lt: twentyFourHoursTenMinsFromNow,
       },
-      status: { $ne: "CANCELLED" }, // Don't remind cancelled events
+      status: { $ne: "CANCELLED" }, 
     });
 
     let reminderCount = 0;
 
     for (const event of events) {
       // Notify BTC
-      // In-app
       await Notification.create({
         userId: event.btcId,
         type: "REMINDER",
@@ -852,7 +836,6 @@ exports.sendPreEventReminders = async () => {
         relatedModel: "Event",
       });
 
-      // Email BTC
       const btcUser = await require("../models/User").findById(event.btcId);
       if (btcUser) {
         await emailService.sendEmail({
@@ -863,14 +846,12 @@ exports.sendPreEventReminders = async () => {
         });
       }
 
-      // Notify Approved CTVs
       const applications = await Application.find({
         eventId: event._id,
         status: "APPROVED",
       }).populate("ctvId", "email");
 
       for (const app of applications) {
-        // In-app
         await Notification.create({
           userId: app.ctvId._id,
           type: "REMINDER",

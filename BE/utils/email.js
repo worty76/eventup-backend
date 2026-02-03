@@ -1,6 +1,5 @@
 const Brevo = require("@getbrevo/brevo");
 
-// Initialize Brevo API with API key
 const apiInstance = new Brevo.TransactionalEmailsApi();
 apiInstance.setApiKey(
   Brevo.TransactionalEmailsApiApiKeys.apiKey,
@@ -29,7 +28,6 @@ const sendEmail = async (options) => {
   }
 };
 
-// Send verification email
 const sendVerificationEmail = async (email, otp) => {
   const subject = "Verify Your Account";
   const text = `Your OTP code is: ${otp}. Valid for ${process.env.OTP_EXPIRE_MINUTES} minutes.`;
@@ -46,7 +44,6 @@ const sendVerificationEmail = async (email, otp) => {
   await sendEmail({ to: email, subject, text, html });
 };
 
-// Send application notification email
 const sendApplicationNotification = async (email, eventTitle) => {
   const subject = "New Application Received";
   const text = `You have received a new application for your event: ${eventTitle}`;
@@ -62,7 +59,6 @@ const sendApplicationNotification = async (email, eventTitle) => {
   await sendEmail({ to: email, subject, text, html });
 };
 
-// Send approval notification email
 const sendApprovalEmail = async (email, eventTitle) => {
   const subject = "Application Approved";
   const text = `Your application for "${eventTitle}" has been approved!`;

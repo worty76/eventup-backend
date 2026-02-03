@@ -20,7 +20,7 @@ exports.healthCheckDetails = async (req, res) => {
     api: 'up',
     mongodb: 'down',
     redis: 'down',
-    email: 'up' // Assumed up unless specifically checked
+    email: 'up' 
   };
 
   // Check MongoDB
