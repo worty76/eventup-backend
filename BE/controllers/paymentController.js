@@ -557,7 +557,6 @@ exports.payosReturn = async (req, res, next) => {
       };
       await payment.save();
 
-      // Update user subscription
       if (payment.subscriptionData && payment.subscriptionData.plan) {
         const user = await User.findById(payment.userId);
 
@@ -580,7 +579,6 @@ exports.payosReturn = async (req, res, next) => {
         `${frontendUrl}/payment-success?orderId=${orderCode}`,
       );
     } else {
-      // Other statuses (PENDING, PROCESSING, etc.)
       return res.redirect(
         `${frontendUrl}/payment-pending?orderId=${orderCode}`,
       );
@@ -603,7 +601,6 @@ exports.payosNotify = async (req, res, next) => {
       checksumKey: process.env.PAYOS_CHECKSUM_KEY,
     });
 
-    // Verify webhook signature
     const webhookData = await payos.webhooks.verify(req.body);
 
     if (!webhookData) {
